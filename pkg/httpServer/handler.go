@@ -1,16 +1,18 @@
 package httpServer
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+
+	v1 "mytonprovider-backend/pkg/models/api/v1"
 )
 
 type providers interface {
-	// AddFile(context.Context) (interface{}, error)
-	// AddFolder(context.Context) (interface{}, error)
+	UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error)
 }
 
 type rateLimiter struct {
