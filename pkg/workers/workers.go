@@ -5,14 +5,16 @@ import (
 	"log"
 	"time"
 
+	providersmaster "mytonprovider-backend/pkg/workers/providersMaster"
 	"mytonprovider-backend/pkg/workers/telemetry"
 )
 
 type workerFunc = func(ctx context.Context) (interval time.Duration, err error)
 
 type worker struct {
-	telemetry telemetry.Worker
-	logger    *log.Logger
+	telemetry       telemetry.Worker
+	providersMaster providersmaster.Worker
+	logger          *log.Logger
 }
 
 type Workers interface {
@@ -21,6 +23,8 @@ type Workers interface {
 
 func (w *worker) Start(ctx context.Context) (err error) {
 	go w.run(ctx, "UpdateTelemetry", w.telemetry.UpdateTelemetry)
+
+	go w.run(ctx, "CollectNewProviders", w.providersMaster.CollectNewProviders)
 
 	return nil
 }
@@ -56,9 +60,14 @@ func (w *worker) run(ctx context.Context, name string, f workerFunc) {
 	}
 }
 
-func NewWorkers(telemetry telemetry.Worker, logger *log.Logger) Workers {
+func NewWorkers(
+	telemetry telemetry.Worker,
+	providersMaster providersmaster.Worker,
+	logger *log.Logger,
+) Workers {
 	return &worker{
-		telemetry: telemetry,
-		logger:    logger,
+		telemetry:       telemetry,
+		providersMaster: providersMaster,
+		logger:          logger,
 	}
 }

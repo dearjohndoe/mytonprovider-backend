@@ -17,6 +17,7 @@ type Repository interface {
 	GetProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.Provider, error)
 	UpdateTelemetry(ctx context.Context, telemetry []db.Telemetry) (err error)
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
+	AddProviders(ctx context.Context, providers []db.ProviderInit) (err error)
 }
 
 func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string) (resp []db.Provider, err error) {
@@ -169,6 +170,26 @@ func (r *repository) GetAllProvidersPubkeys(ctx context.Context) (pubkeys []stri
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
+	return
+}
+
+func (r *repository) AddProviders(ctx context.Context, providers []db.ProviderInit) (err error) {
+	if len(providers) == 0 {
+		return nil
+	}
+
+	query := `
+		INSERT INTO providers.providers (public_key, address, registered_at)
+		SELECT 
+			p->>'public_key',
+			p->>'address',
+			(p->>'registered_at')::timestamptz
+		FROM jsonb_array_elements($1::jsonb) AS p
+		ON CONFLICT DO NOTHING
+	`
+
+	_, err = r.db.Exec(ctx, query, providers)
 
 	return
 }

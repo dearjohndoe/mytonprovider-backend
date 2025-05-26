@@ -1,8 +1,16 @@
 package db
 
+import "time"
+
 type Provider struct {
-	PubKey string `json:"pub_key" db:"pub_key"`
+	PubKey string `json:"storage_pub_key" db:"storage_pub_key"`
 	Telemetry
+}
+
+type ProviderInit struct {
+	Pubkey       string    `json:"public_key"`
+	Address      string    `json:"address"`
+	RegisteredAt time.Time `json:"registered_at"`
 }
 
 type ProviderFilters struct{}

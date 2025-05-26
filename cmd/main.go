@@ -15,7 +15,9 @@ import (
 	"mytonprovider-backend/pkg/httpServer"
 	providersRepository "mytonprovider-backend/pkg/repositories/providers"
 	"mytonprovider-backend/pkg/services/providers"
+	"mytonprovider-backend/pkg/tonclient"
 	"mytonprovider-backend/pkg/workers"
+	providersmaster "mytonprovider-backend/pkg/workers/providersMaster"
 	"mytonprovider-backend/pkg/workers/telemetry"
 )
 
@@ -32,6 +34,13 @@ func main() {
 
 	ctx := context.Background()
 
+	// TON
+	ton, err := tonclient.NewClient(ctx, config.TON.ConfigURL)
+	if err != nil {
+		logger.Printf("Failed to create TON client: %v", err)
+		return
+	}
+
 	// Postgres
 	connPool, err := connectPostgres(config, logger)
 	if err != nil {
@@ -45,7 +54,8 @@ func main() {
 
 	// Workers
 	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache)
-	workers := workers.NewWorkers(telemetryWorker, logger)
+	providersMasterWorker := providersmaster.NewWorker(providersRepo, ton, config.TON.MasterAddress, config.TON.BatchSize)
+	workers := workers.NewWorkers(telemetryWorker, providersMasterWorker, logger)
 	if err := workers.Start(ctx); err != nil {
 		logger.Printf("Failed to start workers: %v", err)
 		return
