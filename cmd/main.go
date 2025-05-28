@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,6 +34,8 @@ func main() {
 	telemetryCache := simpleCache.NewSimpleCache(2 * time.Minute)
 
 	ctx := context.Background()
+
+	accessTokens := strings.Split(config.System.AccessTokens, ",")
 
 	// TON
 	ton, err := tonclient.NewClient(ctx, config.TON.ConfigURL)
@@ -67,7 +70,7 @@ func main() {
 
 	// HTTP Server
 	app := fiber.New()
-	server := httpServer.New(app, filesService, logger)
+	server := httpServer.New(app, filesService, accessTokens, logger)
 
 	server.RegisterRoutes()
 

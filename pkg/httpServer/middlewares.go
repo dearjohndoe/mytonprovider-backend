@@ -1,6 +1,8 @@
 package httpServer
 
 import (
+	"crypto/md5"
+	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -9,6 +11,22 @@ import (
 const (
 	rateLimitDuration = 60
 )
+
+func (h *handler) authorizationMiddleware(c *fiber.Ctx) error {
+	accessToken := c.Get("Authorization")
+	if accessToken == "" {
+		return errorHandler(c, fiber.NewError(fiber.StatusUnauthorized, "Unauthorized"))
+	}
+
+	hash := md5.Sum([]byte(accessToken))
+	tokenHash := fmt.Sprintf("%x", hash[:])
+
+	if _, exists := h.accessTokens[tokenHash]; !exists {
+		return errorHandler(c, fiber.NewError(fiber.StatusForbidden, "Forbidden"))
+	}
+
+	return c.Next()
+}
 
 func (h *handler) loggerMiddleware(c *fiber.Ctx) error {
 	h.logger.Printf("Request: %s %s", c.Method(), c.Path())

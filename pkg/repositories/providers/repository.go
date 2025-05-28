@@ -88,9 +88,9 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			ARRAY(
 				SELECT jsonb_array_elements_text(t->'cpu_load')::float8
 			),
-			(t->>'total_space')::bigint,
-			(t->>'free_space')::bigint,
-			(t->>'used_space')::bigint,
+			(t->>'total_space')::double precision,
+			(t->>'used_space')::double precision,
+			(t->>'free_space')::double precision,
 			(t->>'benchmark_disk_read_speed')::bigint,
 			(t->>'benchmark_disk_write_speed')::bigint,
 			(t->>'benchmark_rocks_ops')::bigint,

@@ -33,9 +33,9 @@ type Telemetry struct {
 	UMachine                string    `json:"uname_machine" db:"uname_machine"`
 	DiskName                string    `json:"disk_name" db:"disk_name"`
 	CPULoad                 []float32 `json:"cpu_load" db:"cpu_load"`
-	TotalDiskSpace          int64     `json:"total_space" db:"total_space"`
-	FreeDiskSpace           int64     `json:"free_space" db:"free_space"`
-	UsedDiskSpace           int64     `json:"used_space" db:"used_space"`
+	TotalDiskSpace          float64   `json:"total_space" db:"total_space"`
+	FreeDiskSpace           float64   `json:"free_space" db:"free_space"`
+	UsedDiskSpace           float64   `json:"used_space" db:"used_space"`
 	BenchmarkDiskReadSpeed  int64     `json:"benchmark_disk_read_speed" db:"benchmark_disk_read_speed"`
 	BenchmarkDiskWriteSpeed int64     `json:"benchmark_disk_write_speed" db:"benchmark_disk_write_speed"`
 	BenchmarkRocksOps       int64     `json:"benchmark_rocks_ops" db:"benchmark_rocks_ops"`

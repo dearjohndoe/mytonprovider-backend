@@ -25,6 +25,19 @@ func NewSimpleCache(ttl time.Duration) *SimpleCache {
 	return c
 }
 
+func (c *SimpleCache) GetAll() map[string]interface{} {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	result := make(map[string]interface{}, len(c.items))
+	for k, it := range c.items {
+		if now.Before(it.expiryTime) {
+			result[k] = it.value
+		}
+	}
+	return result
+}
+
 // Set stores a value with the given key and resets its TTL.
 func (c *SimpleCache) Set(key string, value interface{}) {
 	c.mu.Lock()

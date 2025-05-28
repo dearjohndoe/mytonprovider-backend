@@ -66,12 +66,10 @@ func newPostgresConfig(config *Config, logger *log.Logger) (dbConfig *pgxpool.Co
 	dbConfig.ConnConfig.ConnectTimeout = defaultConnectTimeout
 
 	dbConfig.BeforeAcquire = func(ctx context.Context, c *pgx.Conn) bool {
-		logger.Println("Before acquiring the connection pool to the database!")
 		return true
 	}
 
 	dbConfig.AfterRelease = func(c *pgx.Conn) bool {
-		logger.Println("After releasing the connection pool to the database!")
 		return true
 	}
 

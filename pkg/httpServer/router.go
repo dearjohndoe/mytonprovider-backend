@@ -8,7 +8,7 @@ func (h *handler) RegisterRoutes() {
 
 		apiv1.Post("/providers", h.rateLimiterMiddleware("providers", 10), h.updateTelemetry)
 
-		apiv1.Get("/providers", h.rateLimiterMiddleware("providers", 10), h.getLatestTelemetry)
+		apiv1.Get("/providers", h.rateLimiterMiddleware("providers", 10), h.authorizationMiddleware, h.getLatestTelemetry)
 	}
 
 	h.server.Get("/health", h.rateLimiterMiddleware("health", 60), h.health)

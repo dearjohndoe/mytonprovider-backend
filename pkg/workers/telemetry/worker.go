@@ -3,6 +3,7 @@ package telemetry
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"mytonprovider-backend/pkg/cache"
@@ -115,6 +116,8 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 	if len(items) == 0 {
 		return
 	}
+
+	fmt.Println("Updating telemetry", items)
 
 	err = w.providers.UpdateTelemetry(ctx, items)
 	if err != nil {

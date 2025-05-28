@@ -2,6 +2,7 @@ package providersmaster
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -49,7 +50,7 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 
 	knownProviders := make(map[string]struct{}, len(p))
 	for _, pubkey := range p {
-		knownProviders[pubkey] = struct{}{}
+		knownProviders[strings.ToLower(pubkey)] = struct{}{}
 	}
 
 	txs, err := w.ton.GetTransactions(ctx, w.masterAddr, w.batchSize)
@@ -70,7 +71,9 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 			continue
 		}
 
-		publicKey := txs[i].Message[pos:]
+		publicKey := strings.ToLower(txs[i].Message[pos:])
+
+		fmt.Println(publicKey)
 
 		if _, ok := knownProviders[publicKey]; ok {
 			continue

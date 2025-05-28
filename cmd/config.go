@@ -7,12 +7,13 @@ import (
 )
 
 type System struct {
-	Port string `env:"SYSTEM_PORT" envDefault:"9090"`
+	Port         string `env:"SYSTEM_PORT" envDefault:"9090"`
+	AccessTokens string `env:"SYSTEM_ACCESS_TOKENS" envDefault:""`
 }
 
 type TON struct {
 	MasterAddress string `env:"MASTER_ADDRESS" required:"true" envDefault:"UQB3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0x0"`
-	ConfigURL     string `env:"TON_CONFIG_URL" required:"true" envDefault:"https://ton-blockchain.github.io/testnet-global.config.json"`
+	ConfigURL     string `env:"TON_CONFIG_URL" required:"true" envDefault:"https://ton.org/global-config.json"`
 	BatchSize     uint32 `env:"BATCH_SIZE" required:"true" envDefault:"100"`
 }
 
@@ -52,5 +53,6 @@ func loadConfig() *Config {
 	if err := env.Parse(&cfg.TONStorage); err != nil {
 		log.Fatalf("Failed to parse storage config: %v", err)
 	}
+
 	return cfg
 }

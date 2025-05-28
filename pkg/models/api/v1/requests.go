@@ -1,5 +1,68 @@
 package v1
 
+type SearchProvidersRequest struct {
+	Filters Filters `json:"filters,omitempty"`
+	Sort    Sort    `json:"sort,omitempty"`
+	Limit   int     `json:"limit,omitempty"`  // Limit the number of results returned
+	Offset  int     `json:"offset,omitempty"` // Offset the results returned
+
+	// If set, only providers with exact match the pubkey column will be returned.
+	Exact []string `json:"exact,omitempty"`
+}
+
+type Sort struct {
+	Column string `json:"column,omitempty"` // "workingtime", "rating", "price", "uptime" or "maxSpan"
+	Order  string `json:"order,omitempty"`  // "asc" or "desc"
+}
+
+type Filters struct {
+	RatingGt                  *float64 `json:"rating_gt,omitempty"`
+	RatingLt                  *float64 `json:"rating_lt,omitempty"`
+	RegTimeGtDays             *int64   `json:"reg_time_gt_days,omitempty"`
+	RegTimeLtDays             *int64   `json:"reg_time_lt_days,omitempty"`
+	UpTimeGtPercent           *float64 `json:"up_time_gt_percent,omitempty"`
+	UpTimeLtPercent           *float64 `json:"up_time_lt_percent,omitempty"`
+	WorkingTimeGtSec          *int64   `json:"working_time_gt_sec,omitempty"`
+	WorkingTimeLtSec          *int64   `json:"working_time_lt_sec,omitempty"`
+	PriceGt                   *float64 `json:"price_gt,omitempty"`
+	PriceLt                   *float64 `json:"price_lt,omitempty"`
+	MinSpanGt                 *int64   `json:"min_span_gt,omitempty"`
+	MinSpanLt                 *int64   `json:"min_span_lt,omitempty"`
+	MaxSpanGt                 *int64   `json:"max_span_gt,omitempty"`
+	MaxSpanLt                 *int64   `json:"max_span_lt,omitempty"`
+	MaxBagSizeBytesGt         *int64   `json:"max_bag_size_bytes_gt,omitempty"`
+	MaxBagSizeBytesLt         *int64   `json:"max_bag_size_bytes_lt,omitempty"`
+	IsSendTelemetry           *bool    `json:"is_send_telemetry,omitempty"`
+	TotalProviderSpaceGt      *float64 `json:"total_provider_space_gt,omitempty"`
+	TotalProviderSpaceLt      *float64 `json:"total_provider_space_lt,omitempty"`
+	FreeProviderSpaceGt       *float64 `json:"free_provider_space_gt,omitempty"`
+	FreeProviderSpaceLt       *float64 `json:"free_provider_space_lt,omitempty"`
+	StorageGitHash            *string  `json:"storage_git_hash,omitempty"`
+	ProviderGitHash           *string  `json:"provider_git_hash,omitempty"`
+	CPUNumberGt               *int32   `json:"cpu_number_gt,omitempty"`
+	CPUNumberLt               *int32   `json:"cpu_number_lt,omitempty"`
+	CPUName                   *string  `json:"cpu_name,omitempty"`
+	CPUIsVirtual              *bool    `json:"cpu_is_virtual,omitempty"`
+	TotalRamGt                *float32 `json:"total_ram_gt,omitempty"`
+	TotalRamLt                *float32 `json:"total_ram_lt,omitempty"`
+	FreeRamGt                 *float32 `json:"free_ram_gt,omitempty"`
+	FreeRamLt                 *float32 `json:"free_ram_lt,omitempty"`
+	BenchmarkDiskReadSpeedGt  *float64 `json:"benchmark_disk_read_speed_gt,omitempty"`
+	BenchmarkDiskReadSpeedLt  *float64 `json:"benchmark_disk_read_speed_lt,omitempty"`
+	BenchmarkDiskWriteSpeedGt *float64 `json:"benchmark_disk_write_speed_gt,omitempty"`
+	BenchmarkDiskWriteSpeedLt *float64 `json:"benchmark_disk_write_speed_lt,omitempty"`
+	BenchmarkRocksOpsGt       *float64 `json:"benchmark_rocks_ops_gt,omitempty"`
+	BenchmarkRocksOpsLt       *float64 `json:"benchmark_rocks_ops_lt,omitempty"`
+	SpeedtestDownloadSpeedGt  *float64 `json:"speedtest_download_speed_gt,omitempty"`
+	SpeedtestDownloadSpeedLt  *float64 `json:"speedtest_download_speed_lt,omitempty"`
+	SpeedtestUploadSpeedGt    *float64 `json:"speedtest_upload_speed_gt,omitempty"`
+	SpeedtestUploadSpeedLt    *float64 `json:"speedtest_upload_speed_lt,omitempty"`
+	SpeedtestPingGt           *float64 `json:"speedtest_ping_gt,omitempty"`
+	SpeedtestPingLt           *float64 `json:"speedtest_ping_lt,omitempty"`
+	Country                   *string  `json:"country,omitempty"`
+	ISP                       *string  `json:"isp,omitempty"`
+}
+
 type TelemetryRequest struct {
 	Storage          StorageInfo        `json:"storage"`
 	GitHashes        map[string]string  `json:"git_hashes"`
@@ -8,12 +71,12 @@ type TelemetryRequest struct {
 	DisksLoadPercent interface{}        `json:"disks_load_percent"` // todo: define
 	IOPS             interface{}        `json:"iops"`               // todo: define
 	PPS              interface{}        `json:"pps"`                // todo: define
-	Memory           MemoryInfo         `json:"memory"`
+	Memory           MemoryInfo         `json:"ram"`
 	Swap             MemoryInfo         `json:"swap"`
 	Uname            UnameInfo          `json:"uname"`
 	CPUInfo          CPUInfo            `json:"cpu_info"`
 	Pings            map[string]float64 `json:"pings"`
-	Benchmark        BenchmarkInfo      `json:"benchmark"`
+	Benchmark        interface{}        `json:"benchmark"`
 }
 
 type ProviderInfo struct {
@@ -25,9 +88,9 @@ type ProviderInfo struct {
 type StorageInfo struct {
 	PubKey         string       `json:"pubkey"`
 	DiskName       string       `json:"disk_name"`
-	TotalDiskSpace int64        `json:"total_disk_space"`
-	UsedDiskSpace  int64        `json:"used_disk_space"`
-	FreeDiskSpace  int64        `json:"free_disk_space"`
+	TotalDiskSpace float64      `json:"total_disk_space"`
+	UsedDiskSpace  float64      `json:"used_disk_space"`
+	FreeDiskSpace  float64      `json:"free_disk_space"`
 	Provider       ProviderInfo `json:"provider"`
 }
 
@@ -46,7 +109,7 @@ type UnameInfo struct {
 
 type CPUInfo struct {
 	CPULoad     []float32 `json:"cpu_load"`
-	Number      int32     `json:"number"`
+	Number      int32     `json:"cpu_count"`
 	CPUName     string    `json:"cpu_name"`
 	ProductName string    `json:"product_name"`
 	IsVirtual   bool      `json:"is_virtual"`

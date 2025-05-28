@@ -21,7 +21,9 @@ type providers interface {
 
 type Providers interface {
 	AddProvider(ctx context.Context, provider *db.Provider) (err error)
+	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) ([]db.Provider, error)
 	GetProviders(ctx context.Context) (providers []*db.Provider, err error)
+	GetLatestTelemetry(ctx context.Context) (providers []*v1.TelemetryRequest, err error)
 	UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error)
 }
 
@@ -29,7 +31,18 @@ func (s *service) AddProvider(ctx context.Context, provider *db.Provider) (err e
 	return
 }
 
+func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []db.Provider, err error) {
+
+	return
+}
+
 func (s *service) GetProviders(ctx context.Context) (providers []*db.Provider, err error) {
+	return
+}
+
+func (s *service) GetLatestTelemetry(ctx context.Context) (providers []*v1.TelemetryRequest, err error) {
+	// logic in cache middleware
+
 	return
 }
 
