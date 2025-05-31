@@ -16,7 +16,7 @@ import (
 
 const (
 	tspPrefix = "tsp-"
-	retries   = 5
+	retries   = 20
 )
 
 type client struct {
@@ -30,21 +30,18 @@ type Client interface {
 
 func (c *client) GetTransactions(ctx context.Context, addr string, count uint32) (txs []*Transaction, err error) {
 	api := ton.NewAPIClient(c.clientPool).WithRetry(retries)
-
-	block, err := api.CurrentMasterchainInfo(ctx)
+	a, _ := address.ParseAddr(addr)
+	b, err := api.GetMasterchainInfo(ctx)
 	if err != nil {
-		log.Printf("get current masterchain info err: %s", err.Error())
+		log.Printf("get masterchain info err: %s", err.Error())
 		err = &models.AppError{
 			Code:    models.InternalServerErrorCode,
 			Message: "network error",
 		}
-
 		return
 	}
 
-	a, _ := address.ParseAddr(addr)
-
-	account, err := api.GetAccount(ctx, block, a)
+	account, err := api.GetAccount(ctx, b, a)
 	if err != nil {
 		log.Printf("get account err: %s", err.Error())
 		err = &models.AppError{

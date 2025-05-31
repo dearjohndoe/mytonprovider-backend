@@ -7,6 +7,15 @@ type Provider struct {
 	Telemetry
 }
 
+type ProviderInfo struct {
+	Pubkey       string  `json:"public_key"`
+	Rating       float64 `json:"rating"`
+	RatePerMBDay int64   `json:"rate_per_mb_per_day"`
+	MinBounty    int64   `json:"min_bounty"`
+	MinSpan      uint32  `json:"min_span"`
+	MaxSpan      uint32  `json:"max_span"`
+}
+
 type ProviderInit struct {
 	Pubkey       string    `json:"public_key"`
 	Address      string    `json:"address"`

@@ -17,6 +17,8 @@ type Repository interface {
 	GetProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.Provider, error)
 	UpdateTelemetry(ctx context.Context, telemetry []db.Telemetry) (err error)
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
+	UpdateProviders(ctx context.Context, providers []db.ProviderInfo) (err error)
+	DisableProviders(ctx context.Context, providers []string) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderInit) (err error)
 }
 
@@ -34,6 +36,12 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 	}
 
 	query := `
+		WITH upd_providers AS (
+			UPDATE providers.providers
+			SET
+				is_send_telemetry = true
+			WHERE public_key = ANY(SELECT t->>'public_key' FROM jsonb_array_elements($1::jsonb) t)
+		)
 		INSERT INTO providers.telemetry (
 			public_key,
 			storage_git_hash,
@@ -174,17 +182,67 @@ func (r *repository) GetAllProvidersPubkeys(ctx context.Context) (pubkeys []stri
 	return
 }
 
+func (r *repository) UpdateProviders(ctx context.Context, providers []db.ProviderInfo) (err error) {
+	if len(providers) == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE providers.providers
+		SET
+			rate_per_mb_per_day = p.rate_per_mb_per_day,
+			min_bounty = p.min_bounty,
+			min_span = p.min_span,
+			max_span = p.max_span,
+			rating = p.rating,
+			is_initialized = true,
+			updated_at = NOW()
+		FROM (
+			SELECT
+				p->>'public_key' AS public_key,
+				(p->>'rate_per_mb_per_day')::bigint AS rate_per_mb_per_day,
+				(p->>'min_bounty')::bigint AS min_bounty,
+				(p->>'min_span')::int AS min_span,
+				(p->>'max_span')::int AS max_span,
+				(p->>'rating')::float8 AS rating
+			FROM jsonb_array_elements($1::jsonb) AS p
+		) AS p
+		WHERE providers.providers.public_key = p.public_key
+	`
+
+	_, err = r.db.Exec(ctx, query, providers)
+
+	return
+}
+
+func (r *repository) DisableProviders(ctx context.Context, providers []string) (err error) {
+	if len(providers) == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE providers.providers
+		SET is_available = false, updated_at = NOW()
+		WHERE public_key = ANY($1::text[])
+	`
+
+	_, err = r.db.Exec(ctx, query, providers)
+
+	return
+}
+
 func (r *repository) AddProviders(ctx context.Context, providers []db.ProviderInit) (err error) {
 	if len(providers) == 0 {
 		return nil
 	}
 
 	query := `
-		INSERT INTO providers.providers (public_key, address, registered_at)
+		INSERT INTO providers.providers (public_key, address, registered_at, is_initialized)
 		SELECT 
 			p->>'public_key',
 			p->>'address',
-			(p->>'registered_at')::timestamptz
+			(p->>'registered_at')::timestamptz,
+			false
 		FROM jsonb_array_elements($1::jsonb) AS p
 		ON CONFLICT DO NOTHING
 	`

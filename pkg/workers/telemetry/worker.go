@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 
 	"mytonprovider-backend/pkg/cache"
 	v1 "mytonprovider-backend/pkg/models/api/v1"
@@ -18,6 +21,7 @@ type providers interface {
 
 type telemetryWorker struct {
 	providers providers
+	provider  *transport.Client
 	cache     *cache.SimpleCache
 }
 
@@ -56,8 +60,8 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 			providerGitHash string
 		)
 		if telemetryItem.GitHashes != nil {
-			storageGitHash = telemetryItem.GitHashes["storage"]
-			providerGitHash = telemetryItem.GitHashes["provider"]
+			storageGitHash = telemetryItem.GitHashes["ton-storage"]
+			providerGitHash = telemetryItem.GitHashes["ton-storage-provider"]
 		}
 
 		// TODO: separate
@@ -76,7 +80,7 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 		}
 
 		items = append(items, db.Telemetry{
-			PublicKey:               telemetryItem.Storage.Provider.PubKey,
+			PublicKey:               strings.ToLower(telemetryItem.Storage.Provider.PubKey),
 			UsedProviderSpace:       telemetryItem.Storage.Provider.UsedProviderSpace,
 			TotalProviderSpace:      telemetryItem.Storage.Provider.TotalProviderSpace,
 			StorageGitHash:          storageGitHash,
