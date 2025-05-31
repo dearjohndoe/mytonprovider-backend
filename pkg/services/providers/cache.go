@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"strings"
+	"time"
 
 	"mytonprovider-backend/pkg/cache"
 	v1 "mytonprovider-backend/pkg/models/api/v1"
@@ -10,8 +11,9 @@ import (
 )
 
 type cacheMiddleware struct {
-	svc       Providers
-	telemetry *cache.SimpleCache
+	svc    Providers
+	buffer *cache.SimpleCache
+	lates  *cache.SimpleCache
 }
 
 func (c *cacheMiddleware) AddProvider(ctx context.Context, provider *db.Provider) (err error) {
@@ -28,7 +30,7 @@ func (c *cacheMiddleware) GetProviders(ctx context.Context) (providers []*db.Pro
 }
 
 func (c *cacheMiddleware) GetLatestTelemetry(ctx context.Context) (providers []*v1.TelemetryRequest, err error) {
-	data := c.telemetry.GetAll()
+	data := c.lates.GetAll()
 	if len(data) == 0 {
 		return
 	}
@@ -49,14 +51,17 @@ func (c *cacheMiddleware) UpdateTelemetry(ctx context.Context, telemetry *v1.Tel
 		return
 	}
 
-	c.telemetry.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
+	c.buffer.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
+	c.lates.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
 
 	return
 }
 
 func NewCacheMiddleware(svc Providers, telemetry *cache.SimpleCache) Providers {
+	latest := cache.NewSimpleCache(2 * time.Minute)
 	return &cacheMiddleware{
-		svc:       svc,
-		telemetry: telemetry,
+		svc:    svc,
+		buffer: telemetry,
+		lates:  latest,
 	}
 }
