@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
 	"fmt"
 	"log"
 	"net/url"
@@ -9,6 +10,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/xssnick/tonutils-go/adnl"
+	"github.com/xssnick/tonutils-go/adnl/dht"
+	"github.com/xssnick/tonutils-go/liteclient"
+	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 )
 
 func connectPostgres(config *Config, logger *log.Logger) (connPool *pgxpool.Pool, err error) {
@@ -76,6 +81,50 @@ func newPostgresConfig(config *Config, logger *log.Logger) (dbConfig *pgxpool.Co
 	dbConfig.BeforeClose = func(c *pgx.Conn) {
 		logger.Println("Closed the connection pool to the database!")
 	}
+
+	return
+}
+
+func newProviderClient(ctx context.Context, configURL, ADNLPort string, privateKey ed25519.PrivateKey) (tc *transport.Client, err error) {
+	lsCfg, err := liteclient.GetConfigFromUrl(ctx, configURL)
+	if err != nil {
+		err = fmt.Errorf("failed to get liteclient config: %w", err)
+		return
+	}
+
+	_, dhtAdnlKey, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		err = fmt.Errorf("failed to generate DHT ADNL key: %w", err)
+		return
+	}
+
+	dl, err := adnl.DefaultListener("0.0.0.0:" + ADNLPort)
+	if err != nil {
+		err = fmt.Errorf("failed to create default listener: %w", err)
+		return
+	}
+
+	netMgr := adnl.NewMultiNetReader(dl)
+
+	dhtGate := adnl.NewGatewayWithNetManager(dhtAdnlKey, netMgr)
+	if err = dhtGate.StartClient(); err != nil {
+		err = fmt.Errorf("failed to start DHT gateway: %w", err)
+		return
+	}
+
+	dhtClient, err := dht.NewClientFromConfig(dhtGate, lsCfg)
+	if err != nil {
+		err = fmt.Errorf("failed to create DHT client: %w", err)
+		return
+	}
+
+	gateProvider := adnl.NewGatewayWithNetManager(privateKey, netMgr)
+	if err = gateProvider.StartClient(); err != nil {
+		err = fmt.Errorf("failed to start ADNL gateway for provider: %w", err)
+		return
+	}
+
+	tc = transport.NewClient(gateProvider, dhtClient)
 
 	return
 }

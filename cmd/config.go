@@ -1,19 +1,22 @@
 package main
 
 import (
+	"crypto/ed25519"
 	"log"
 
 	"github.com/caarlos0/env/v11"
 )
 
 type System struct {
-	Port         string `env:"SYSTEM_PORT" envDefault:"9090"`
-	AccessTokens string `env:"SYSTEM_ACCESS_TOKENS" envDefault:""`
+	Port         string             `env:"SYSTEM_PORT" envDefault:"9090"`
+	ADNLPort     string             `env:"SYSTEM_ADNL_PORT" envDefault:"16167"`
+	AccessTokens string             `env:"SYSTEM_ACCESS_TOKENS" envDefault:""`
+	Key          ed25519.PrivateKey `env:"SYSTEM_KEY" required:"false"`
 }
 
 type TON struct {
 	MasterAddress string `env:"MASTER_ADDRESS" required:"true" envDefault:"UQB3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0x0"`
-	ConfigURL     string `env:"TON_CONFIG_URL" required:"true" envDefault:"https://ton.org/global-config.json"`
+	ConfigURL     string `env:"TON_CONFIG_URL" required:"true" envDefault:"https://ton-blockchain.github.io/global.config.json"`
 	BatchSize     uint32 `env:"BATCH_SIZE" required:"true" envDefault:"100"`
 }
 
@@ -52,6 +55,12 @@ func loadConfig() *Config {
 	}
 	if err := env.Parse(&cfg.TONStorage); err != nil {
 		log.Fatalf("Failed to parse storage config: %v", err)
+	}
+
+	if cfg.System.Key == nil {
+		_, priv, _ := ed25519.GenerateKey(nil)
+		key := priv.Seed()
+		cfg.System.Key = ed25519.NewKeyFromSeed(key)
 	}
 
 	return cfg

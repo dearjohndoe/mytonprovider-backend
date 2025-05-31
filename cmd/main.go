@@ -44,6 +44,12 @@ func main() {
 		return
 	}
 
+	providerClient, err := newProviderClient(ctx, config.TON.ConfigURL, config.System.ADNLPort, config.System.Key)
+	if err != nil {
+		logger.Printf("Failed to create provider client: %v", err)
+		return
+	}
+
 	// Postgres
 	connPool, err := connectPostgres(config, logger)
 	if err != nil {
@@ -57,7 +63,7 @@ func main() {
 
 	// Workers
 	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache)
-	providersMasterWorker := providersmaster.NewWorker(providersRepo, ton, config.TON.MasterAddress, config.TON.BatchSize)
+	providersMasterWorker := providersmaster.NewWorker(providersRepo, ton, providerClient, config.TON.MasterAddress, config.TON.BatchSize)
 	workers := workers.NewWorkers(telemetryWorker, providersMasterWorker, logger)
 	if err := workers.Start(ctx); err != nil {
 		logger.Printf("Failed to start workers: %v", err)
