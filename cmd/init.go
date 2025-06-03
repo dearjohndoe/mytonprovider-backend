@@ -16,26 +16,26 @@ import (
 	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 )
 
-func connectPostgres(config *Config, logger *log.Logger) (connPool *pgxpool.Pool, err error) {
+func connectPostgres(ctx context.Context, config *Config, logger *log.Logger) (connPool *pgxpool.Pool, err error) {
 	cfg, err := newPostgresConfig(config, logger)
 	if err != nil {
 		return
 	}
 
-	connPool, err = pgxpool.NewWithConfig(context.Background(), cfg)
+	connPool, err = pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		err = fmt.Errorf("failed to create a new Postgres connection pool: %w", err)
 		return
 	}
 
-	connection, err := connPool.Acquire(context.Background())
+	connection, err := connPool.Acquire(ctx)
 	if err != nil {
 		err = fmt.Errorf("failed to acquire a connection from the Postgres pool: %w", err)
 		return
 	}
 	defer connection.Release()
 
-	err = connection.Ping(context.Background())
+	err = connection.Ping(ctx)
 	if err != nil {
 		err = fmt.Errorf("failed to ping the Postgres database: %w", err)
 		return

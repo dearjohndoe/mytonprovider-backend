@@ -9,12 +9,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	v1 "mytonprovider-backend/pkg/models/api/v1"
-	"mytonprovider-backend/pkg/models/db"
 )
 
 type providers interface {
-	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) ([]db.Provider, error)
-	GetLatestTelemetry(ctx context.Context) (providers []*v1.TelemetryRequest, err error)
+	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) ([]v1.Provider, error)
+	GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error)
 	UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error)
 }
 

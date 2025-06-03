@@ -26,6 +26,8 @@ func (w *worker) Start(ctx context.Context) (err error) {
 
 	go w.run(ctx, "CollectNewProviders", w.providersMaster.CollectNewProviders)
 	go w.run(ctx, "UpdateKnownProviders", w.providersMaster.UpdateKnownProviders)
+	go w.run(ctx, "UpdateUptime", w.providersMaster.UpdateUptime)
+	go w.run(ctx, "UpdateRating", w.providersMaster.UpdateRating)
 
 	return nil
 }
@@ -34,13 +36,6 @@ func (w *worker) run(ctx context.Context, name string, f workerFunc) {
 	for {
 		select {
 		case <-ctx.Done():
-			// Call one last time before exiting
-			_, err := f(ctx)
-			if err != nil {
-				w.logger.Printf("Error in worker %s on exit: %v", name, err)
-			} else {
-				w.logger.Printf("Worker %s completed successfully on exit", name)
-			}
 			return
 		default:
 			interval, err := f(ctx)

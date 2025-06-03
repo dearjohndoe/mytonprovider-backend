@@ -21,8 +21,8 @@ func (h *handler) searchProviders(c *fiber.Ctx) (err error) {
 		return errorHandler(c, err)
 	}
 
-	return c.JSON(fiber.Map{
-		"providers": providers,
+	return c.JSON(v1.ProvidersResponse{
+		Providers: providers,
 	})
 }
 

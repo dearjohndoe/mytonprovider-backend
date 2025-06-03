@@ -7,7 +7,6 @@ import (
 
 	"mytonprovider-backend/pkg/cache"
 	v1 "mytonprovider-backend/pkg/models/api/v1"
-	"mytonprovider-backend/pkg/models/db"
 )
 
 type cacheMiddleware struct {
@@ -16,29 +15,20 @@ type cacheMiddleware struct {
 	lates  *cache.SimpleCache
 }
 
-func (c *cacheMiddleware) AddProvider(ctx context.Context, provider *db.Provider) (err error) {
-	return c.svc.AddProvider(ctx, provider)
+func (c *cacheMiddleware) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error) {
+	return c.svc.SearchProviders(ctx, req)
 }
 
-func (c *cacheMiddleware) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []db.Provider, err error) {
-
-	return
-}
-
-func (c *cacheMiddleware) GetProviders(ctx context.Context) (providers []*db.Provider, err error) {
-	return c.svc.GetProviders(ctx)
-}
-
-func (c *cacheMiddleware) GetLatestTelemetry(ctx context.Context) (providers []*v1.TelemetryRequest, err error) {
+func (c *cacheMiddleware) GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error) {
 	data := c.lates.GetAll()
 	if len(data) == 0 {
 		return
 	}
 
-	providers = make([]*v1.TelemetryRequest, 0, len(data))
+	providers = make([]v1.TelemetryRequest, 0, len(data))
 	for _, v := range data {
-		if telemetry, ok := v.(*v1.TelemetryRequest); ok {
-			providers = append(providers, telemetry)
+		if telemetry, ok := v.(*v1.TelemetryRequest); ok && telemetry != nil {
+			providers = append(providers, *telemetry)
 		}
 	}
 

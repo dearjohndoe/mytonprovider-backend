@@ -16,7 +16,7 @@ import (
 
 type providers interface {
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
-	UpdateTelemetry(ctx context.Context, telemetry []db.Telemetry) (err error)
+	UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error)
 }
 
 type telemetryWorker struct {
@@ -43,7 +43,7 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 		return
 	}
 
-	items := make([]db.Telemetry, 0, len(pubkeys))
+	items := make([]db.TelemetryUpdate, 0, len(pubkeys))
 	for _, pubkey := range pubkeys {
 		item, found := w.cache.Release(pubkey)
 		if !found {
@@ -79,7 +79,7 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 			}
 		}
 
-		items = append(items, db.Telemetry{
+		items = append(items, db.TelemetryUpdate{
 			PublicKey:               strings.ToLower(telemetryItem.Storage.Provider.PubKey),
 			UsedProviderSpace:       telemetryItem.Storage.Provider.UsedProviderSpace,
 			TotalProviderSpace:      telemetryItem.Storage.Provider.TotalProviderSpace,

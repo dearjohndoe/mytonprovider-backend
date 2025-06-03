@@ -3,6 +3,7 @@ package providersmaster
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"math/big"
 	"strings"
 	"time"
@@ -21,9 +22,11 @@ const (
 
 type providers interface {
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
-	AddProviders(ctx context.Context, providers []db.ProviderInit) (err error)
-	UpdateProviders(ctx context.Context, providers []db.ProviderInfo) (err error)
-	DisableProviders(ctx context.Context, providers []string) (err error)
+	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
+	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
+	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
+	UpdateUptime(ctx context.Context) (err error)
+	UpdateRating(ctx context.Context) (err error)
 }
 
 type ton interface {
@@ -41,6 +44,8 @@ type providersMasterWorker struct {
 type Worker interface {
 	CollectNewProviders(ctx context.Context) (interval time.Duration, err error)
 	UpdateKnownProviders(ctx context.Context) (interval time.Duration, err error)
+	UpdateUptime(ctx context.Context) (interval time.Duration, err error)
+	UpdateRating(ctx context.Context) (interval time.Duration, err error)
 }
 
 func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interval time.Duration, err error) {
@@ -62,13 +67,16 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 		knownProviders[strings.ToLower(pubkey)] = struct{}{}
 	}
 
-	txs, err := w.ton.GetTransactions(ctx, w.masterAddr, w.batchSize)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	txs, err := w.ton.GetTransactions(timeoutCtx, w.masterAddr, w.batchSize)
 	if err != nil {
 		interval = failureInterval
 		return
 	}
 
-	uniqueProviders := make(map[string]db.ProviderInit)
+	uniqueProviders := make(map[string]db.ProviderCreate)
 	for i := range txs {
 		pos := strings.Index(txs[i].Message, prefix)
 		if pos < 0 {
@@ -96,7 +104,7 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 			continue
 		}
 
-		uniqueProviders[pubkey] = db.ProviderInit{
+		uniqueProviders[pubkey] = db.ProviderCreate{
 			Pubkey:       pubkey,
 			Address:      txs[i].From,
 			RegisteredAt: txs[i].RegisteredAt,
@@ -107,7 +115,7 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 		return
 	}
 
-	providersInit := make([]db.ProviderInit, 0, len(uniqueProviders))
+	providersInit := make([]db.ProviderCreate, 0, len(uniqueProviders))
 	for _, provider := range uniqueProviders {
 		providersInit = append(providersInit, provider)
 	}
@@ -139,24 +147,37 @@ func (w *providersMasterWorker) UpdateKnownProviders(ctx context.Context) (inter
 		return
 	}
 
-	providersInfo := make([]db.ProviderInfo, 0, len(p))
-	disabledProviders := make([]string, 0, len(p))
+	providersInfo := make([]db.ProviderUpdate, 0, len(p))
+	providersStatuses := make([]db.ProviderStatusUpdate, 0, len(p))
 	for _, pubkey := range p {
+		select {
+		case <-ctx.Done():
+			fmt.Println("Context done, stopping provider check")
+			return
+		default:
+		}
 		prv, err := hex.DecodeString(pubkey)
 		if err != nil || len(prv) != 32 {
 			continue
 		}
 
 		timeoutCtx, cancel := context.WithTimeout(ctx, providerResponseTimeout)
-		defer cancel()
-
 		rates, err := w.providerClient.GetStorageRates(timeoutCtx, prv, fakeSize)
+		cancel()
 		if err != nil {
-			disabledProviders = append(disabledProviders, pubkey)
+			providersStatuses = append(providersStatuses, db.ProviderStatusUpdate{
+				Pubkey:   pubkey,
+				IsOnline: false,
+			})
 			continue
 		}
 
-		providersInfo = append(providersInfo, db.ProviderInfo{
+		providersStatuses = append(providersStatuses, db.ProviderStatusUpdate{
+			Pubkey:   pubkey,
+			IsOnline: true,
+		})
+
+		providersInfo = append(providersInfo, db.ProviderUpdate{
 			Pubkey:       pubkey,
 			RatePerMBDay: new(big.Int).SetBytes(rates.RatePerMBDay).Int64(),
 			MinBounty:    new(big.Int).SetBytes(rates.MinBounty).Int64(),
@@ -165,13 +186,47 @@ func (w *providersMasterWorker) UpdateKnownProviders(ctx context.Context) (inter
 		})
 	}
 
-	err = w.providers.DisableProviders(ctx, disabledProviders)
+	err = w.providers.AddStatuses(ctx, providersStatuses)
 	if err != nil {
 		interval = failureInterval
 		return
 	}
 
 	err = w.providers.UpdateProviders(ctx, providersInfo)
+	if err != nil {
+		interval = failureInterval
+		return
+	}
+
+	return
+}
+
+func (w *providersMasterWorker) UpdateUptime(ctx context.Context) (interval time.Duration, err error) {
+	const (
+		failureInterval = 5 * time.Second
+		successInterval = 30 * time.Minute
+	)
+
+	interval = successInterval
+
+	err = w.providers.UpdateUptime(ctx)
+	if err != nil {
+		interval = failureInterval
+		return
+	}
+
+	return
+}
+
+func (w *providersMasterWorker) UpdateRating(ctx context.Context) (interval time.Duration, err error) {
+	const (
+		failureInterval = 5 * time.Second
+		successInterval = 30 * time.Minute
+	)
+
+	interval = successInterval
+
+	err = w.providers.UpdateRating(ctx)
 	if err != nil {
 		interval = failureInterval
 		return

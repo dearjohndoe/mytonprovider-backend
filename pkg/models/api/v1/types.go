@@ -3,8 +3,8 @@ package v1
 type SearchProvidersRequest struct {
 	Filters Filters `json:"filters,omitempty"`
 	Sort    Sort    `json:"sort,omitempty"`
-	Limit   int     `json:"limit,omitempty"`  // Limit the number of results returned
-	Offset  int     `json:"offset,omitempty"` // Offset the results returned
+	Limit   int     `json:"limit,omitempty"`
+	Offset  int     `json:"offset,omitempty"`
 
 	// If set, only providers with exact match the pubkey column will be returned.
 	Exact []string `json:"exact,omitempty"`
@@ -20,8 +20,8 @@ type Filters struct {
 	RatingLt                  *float64 `json:"rating_lt,omitempty"`
 	RegTimeGtDays             *int64   `json:"reg_time_gt_days,omitempty"`
 	RegTimeLtDays             *int64   `json:"reg_time_lt_days,omitempty"`
-	UpTimeGtPercent           *float64 `json:"up_time_gt_percent,omitempty"`
-	UpTimeLtPercent           *float64 `json:"up_time_lt_percent,omitempty"`
+	UpTimeGtPercent           *float64 `json:"uptime_gt_percent,omitempty"`
+	UpTimeLtPercent           *float64 `json:"uptime_lt_percent,omitempty"`
 	WorkingTimeGtSec          *int64   `json:"working_time_gt_sec,omitempty"`
 	WorkingTimeLtSec          *int64   `json:"working_time_lt_sec,omitempty"`
 	PriceGt                   *float64 `json:"price_gt,omitempty"`
@@ -127,4 +127,48 @@ type BenchmarkInfo struct {
 	Lite BenchmarkLevel `json:"lite"`
 	Hard BenchmarkLevel `json:"hard"`
 	Full BenchmarkLevel `json:"full"`
+}
+
+type Telemetry struct {
+	StorageGitHash          *string  `json:"storage_git_hash"`
+	ProviderGitHash         *string  `json:"provider_git_hash"`
+	TotalProviderSpace      *float32 `json:"total_provider_space"`
+	FreeProviderSpace       *float32 `json:"free_provider_space"`
+	CPUName                 *string  `json:"cpu_name"`
+	CPUNumber               *uint16  `json:"cpu_number"`
+	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`
+	TotalRAM                *float32 `json:"total_ram"`
+	FreeRAM                 *float32 `json:"free_ram"`
+	BenchmarkDiskReadSpeed  *float32 `json:"benchmark_disk_read_speed"`
+	BenchmarkDiskWriteSpeed *float32 `json:"benchmark_disk_write_speed"`
+	BenchmarkRocksOps       *int32   `json:"benchmark_rocks_ops"`
+	SpeedtestDownloadSpeed  *float32 `json:"speedtest_download_speed"`
+	SpeedtestUploadSpeed    *float32 `json:"speedtest_upload_speed"`
+	SpeedtestPing           *float32 `json:"speedtest_ping"`
+	Country                 *string  `json:"country"`
+	ISP                     *string  `json:"isp"`
+}
+
+type Provider struct {
+	PubKey      string  `json:"pubkey"`
+	UpTime      float32 `json:"uptime"`
+	WorkingTime uint64  `json:"working_time"`
+	Rating      float32 `json:"rating"`
+	MaxSpan     uint32  `json:"max_span"`
+	Price       uint32  `json:"price"`
+
+	MinSpan         uint32    `json:"min_span"`
+	MaxBagSizeBytes uint64    `json:"max_bag_size_bytes"`
+	RegTime         uint64    `json:"reg_time"`
+	IsSendTelemetry bool      `json:"is_send_telemetry"`
+	Telemetry       Telemetry `json:"telemetry"`
+}
+
+type ProvidersResponse struct {
+	Providers []Provider `json:"providers"`
+}
+
+type TelemetryResponse struct {
+	PubKey    string    `json:"pubkey"`
+	Telemetry Telemetry `json:"telemetry"`
 }
