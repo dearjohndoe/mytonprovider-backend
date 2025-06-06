@@ -2,17 +2,41 @@ package httpServer
 
 import (
 	"encoding/json"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
 
 	v1 "mytonprovider-backend/pkg/models/api/v1"
 )
 
+func (h *handler) limitReached(c *fiber.Ctx) error {
+	log := h.logger.With(
+		slog.String("method", "limitReached"),
+		slog.String("method", c.Method()),
+		slog.String("url", c.OriginalURL()),
+		slog.Any("headers", c.GetReqHeaders()),
+	)
+
+	log.Warn("rate limit reached for request")
+	return fiber.NewError(fiber.StatusTooManyRequests, "too many requests, please try again later")
+}
+
 func (h *handler) searchProviders(c *fiber.Ctx) (err error) {
+	body := c.Body()
+	log := h.logger.With(
+		slog.String("method", "searchProviders"),
+		slog.String("method", c.Method()),
+		slog.String("url", c.OriginalURL()),
+		slog.Any("headers", c.GetReqHeaders()),
+		slog.Int("body_length", len(body)),
+		slog.String("body", string(body)),
+	)
+
 	var req v1.SearchProvidersRequest
 	err = json.Unmarshal(c.Body(), &req)
 	if err != nil {
-		err = fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+		log.Error("failed to parse search providers body", slog.String("error", err.Error()))
+		err = fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 		return errorHandler(c, err)
 	}
 
@@ -27,34 +51,26 @@ func (h *handler) searchProviders(c *fiber.Ctx) (err error) {
 }
 
 func (h *handler) updateTelemetry(c *fiber.Ctx) (err error) {
-	defer func() {
-		if err != nil {
-			h.logger.Println("Error updating telemetry:", err)
-		}
-	}()
-
 	body := c.Body()
-	h.logger.Printf("Request:\nMethod: %s, URL: %s\nHeaders: %v\nBodyLen: %d\nBody:%s",
-		c.Method(),
-		c.OriginalURL(),
-		c.GetReqHeaders(),
-		len(body),
-		string(body),
+	log := h.logger.With(
+		slog.String("method", "updateTelemetry"),
+		slog.String("method", c.Method()),
+		slog.String("url", c.OriginalURL()),
+		slog.Any("headers", c.GetReqHeaders()),
+		slog.Int("body_length", len(body)),
+		slog.String("body", string(body)),
 	)
 
-	var req v1.TelemetryRequest
-
-	// ignore for now
-	// contentEncoding := c.Get("Content-Encoding")
 	if len(body) == 0 || body[0] != '{' {
-		err = fiber.NewError(fiber.StatusBadRequest, "Invalid gzip body")
+		err = fiber.NewError(fiber.StatusBadRequest, "invalid gzip body")
 		return errorHandler(c, err)
 	}
 
+	var req v1.TelemetryRequest
 	err = json.Unmarshal(body, &req)
 	if err != nil {
-		h.logger.Printf("Failed to parse telemetry body. Err: %e", err)
-		err = fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
+		log.Error("failed to parse telemetry body", slog.String("error", err.Error()))
+		err = fiber.NewError(fiber.StatusBadRequest, "invalid request body")
 		return errorHandler(c, err)
 	}
 

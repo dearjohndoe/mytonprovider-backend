@@ -2,7 +2,7 @@ package workers
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	providersmaster "mytonprovider-backend/pkg/workers/providersMaster"
@@ -14,7 +14,7 @@ type workerFunc = func(ctx context.Context) (interval time.Duration, err error)
 type worker struct {
 	telemetry       telemetry.Worker
 	providersMaster providersmaster.Worker
-	logger          *log.Logger
+	logger          *slog.Logger
 }
 
 type Workers interface {
@@ -33,6 +33,8 @@ func (w *worker) Start(ctx context.Context) (err error) {
 }
 
 func (w *worker) run(ctx context.Context, name string, f workerFunc) {
+	logger := w.logger.With(slog.String("run_worker", name))
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -40,7 +42,7 @@ func (w *worker) run(ctx context.Context, name string, f workerFunc) {
 		default:
 			interval, err := f(ctx)
 			if err != nil {
-				w.logger.Printf("Error in worker %s: %v", name, err)
+				logger.Error(err.Error())
 			}
 			if interval <= 0 {
 				interval = time.Second
@@ -59,7 +61,7 @@ func (w *worker) run(ctx context.Context, name string, f workerFunc) {
 func NewWorkers(
 	telemetry telemetry.Worker,
 	providersMaster providersmaster.Worker,
-	logger *log.Logger,
+	logger *slog.Logger,
 ) Workers {
 	return &worker{
 		telemetry:       telemetry,

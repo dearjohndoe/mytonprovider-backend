@@ -3,15 +3,24 @@ package main
 import (
 	"crypto/ed25519"
 	"log"
+	"log/slog"
 
 	"github.com/caarlos0/env/v11"
 )
+
+var logLevels = map[uint8]slog.Level{
+	0: slog.LevelDebug,
+	1: slog.LevelInfo,
+	2: slog.LevelWarn,
+	3: slog.LevelError,
+}
 
 type System struct {
 	Port         string             `env:"SYSTEM_PORT" envDefault:"9090"`
 	ADNLPort     string             `env:"SYSTEM_ADNL_PORT" envDefault:"16167"`
 	AccessTokens string             `env:"SYSTEM_ACCESS_TOKENS" envDefault:""`
 	Key          ed25519.PrivateKey `env:"SYSTEM_KEY" required:"false"`
+	LogLevel     uint8              `env:"SYSTEM_LOG_LEVEL" envDefault:"1"` // 0 - debug, 1 - info, 2 - warn, 3 - error
 }
 
 type TON struct {

@@ -3,7 +3,7 @@ package providersmaster
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
+	"log/slog"
 	"math/big"
 	"strings"
 	"time"
@@ -39,6 +39,7 @@ type providersMasterWorker struct {
 	providerClient *transport.Client
 	masterAddr     string
 	batchSize      uint32
+	logger         *slog.Logger
 }
 
 type Worker interface {
@@ -53,6 +54,9 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 		successInterval = 1 * time.Minute
 		failureInterval = 5 * time.Second
 	)
+
+	log := w.logger.With("worker", "CollectNewProviders")
+	log.Debug("collecting new providers")
 
 	interval = successInterval
 
@@ -126,6 +130,8 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 		return
 	}
 
+	log.Info("successfully collected new providers", "count", len(providersInit))
+
 	return
 }
 
@@ -134,6 +140,9 @@ func (w *providersMasterWorker) UpdateKnownProviders(ctx context.Context) (inter
 		successInterval = 1 * time.Minute
 		failureInterval = 5 * time.Second
 	)
+
+	log := w.logger.With(slog.String("worker", "UpdateKnownProviders"))
+	log.Debug("updating known providers")
 
 	interval = successInterval
 
@@ -152,7 +161,7 @@ func (w *providersMasterWorker) UpdateKnownProviders(ctx context.Context) (inter
 	for _, pubkey := range p {
 		select {
 		case <-ctx.Done():
-			fmt.Println("Context done, stopping provider check")
+			log.Info("context done, stopping provider check")
 			return
 		default:
 		}
@@ -198,6 +207,8 @@ func (w *providersMasterWorker) UpdateKnownProviders(ctx context.Context) (inter
 		return
 	}
 
+	log.Info("successfully updated known providers", "active", len(providersInfo))
+
 	return
 }
 
@@ -206,6 +217,9 @@ func (w *providersMasterWorker) UpdateUptime(ctx context.Context) (interval time
 		failureInterval = 5 * time.Second
 		successInterval = 30 * time.Minute
 	)
+
+	log := w.logger.With(slog.String("worker", "UpdateUptime"))
+	log.Debug("updating provider uptime")
 
 	interval = successInterval
 
@@ -224,6 +238,9 @@ func (w *providersMasterWorker) UpdateRating(ctx context.Context) (interval time
 		successInterval = 30 * time.Minute
 	)
 
+	log := w.logger.With(slog.String("worker", "UpdateRating"))
+	log.Debug("updating provider ratings")
+
 	interval = successInterval
 
 	err = w.providers.UpdateRating(ctx)
@@ -241,6 +258,7 @@ func NewWorker(
 	providerClient *transport.Client,
 	masterAddr string,
 	batchSize uint32,
+	logger *slog.Logger,
 ) Worker {
 	return &providersMasterWorker{
 		providers:      providers,
@@ -248,5 +266,6 @@ func NewWorker(
 		providerClient: providerClient,
 		masterAddr:     masterAddr,
 		batchSize:      batchSize,
+		logger:         logger,
 	}
 }

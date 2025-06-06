@@ -41,7 +41,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			t.storage_git_hash,
 			t.provider_git_hash,
 			t.total_provider_space,
-			t.total_provider_space - t.used_provider_space as free_provider_space,
+			t.used_provider_space,
 			t.cpu_name,
 			t.cpu_number,
 			t.cpu_is_virtual,
@@ -61,7 +61,12 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 
 	rows, err := r.db.Query(ctx, query, pubkeys)
 	if err != nil {
-		return nil, err
+		if err == pgx.ErrNoRows {
+			err = nil
+			return
+		}
+
+		return
 	}
 	defer rows.Close()
 
@@ -114,6 +119,11 @@ func (r *repository) GetProviders(ctx context.Context, filters db.ProviderFilter
 
 	rows, err := r.db.Query(ctx, query, limit, offset)
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = nil
+			return
+		}
+
 		return
 	}
 	defer rows.Close()
@@ -128,7 +138,7 @@ func (r *repository) GetProviders(ctx context.Context, filters db.ProviderFilter
 
 func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error) {
 	if len(telemetry) == 0 {
-		return nil
+		return
 	}
 
 	query := `
@@ -249,12 +259,13 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 	`
 
 	_, err = r.db.Exec(ctx, query, telemetry)
-	return err
+
+	return
 }
 
 func (r *repository) AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error) {
 	if len(providers) == 0 {
-		return nil
+		return
 	}
 
 	query := `
@@ -345,6 +356,7 @@ func (r *repository) UpdateRating(ctx context.Context) (err error) {
 		WHERE p.public_key = pr.public_key
     `
 	_, err = r.db.Exec(ctx, query)
+
 	return
 }
 
@@ -355,20 +367,26 @@ func (r *repository) GetAllProvidersPubkeys(ctx context.Context) (pubkeys []stri
 
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
-		return nil, err
+		if err == pgx.ErrNoRows {
+			err = nil
+			return
+		}
+
+		return
 	}
 	defer rows.Close()
 
 	for rows.Next() {
 		var pubkey string
-		if err := rows.Scan(&pubkey); err != nil {
-			return nil, err
+		if rErr := rows.Scan(&pubkey); rErr != nil {
+			err = rErr
+			return
 		}
 		pubkeys = append(pubkeys, pubkey)
 	}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
+	if rErr := rows.Err(); rErr != nil {
+		return
 	}
 
 	return
@@ -376,7 +394,7 @@ func (r *repository) GetAllProvidersPubkeys(ctx context.Context) (pubkeys []stri
 
 func (r *repository) UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error) {
 	if len(providers) == 0 {
-		return nil
+		return
 	}
 
 	query := `
@@ -407,7 +425,7 @@ func (r *repository) UpdateProviders(ctx context.Context, providers []db.Provide
 
 func (r *repository) AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error) {
 	if len(providers) == 0 {
-		return nil
+		return
 	}
 
 	query := `
@@ -443,7 +461,7 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 			&provider.Telemetry.StorageGitHash,
 			&provider.Telemetry.ProviderGitHash,
 			&provider.Telemetry.TotalProviderSpace,
-			&provider.Telemetry.FreeProviderSpace,
+			&provider.Telemetry.UsedProviderSpace,
 			&provider.Telemetry.CPUName,
 			&provider.Telemetry.CPUNumber,
 			&provider.Telemetry.CPUIsVirtual,

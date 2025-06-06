@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -32,30 +32,37 @@ func run() (err error) {
 	// Tools
 	config := loadConfig()
 	if config == nil {
-		fmt.Println("Failed to load configuration")
+		fmt.Println("failed to load configuration")
 		return
 	}
 
-	logger := log.Default()
+	logLevel := slog.LevelInfo
+	if level, ok := logLevels[config.System.LogLevel]; ok {
+		logLevel = level
+	}
+
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: logLevel,
+	}))
 	telemetryCache := simpleCache.NewSimpleCache(2 * time.Minute)
 
 	// TON
 	ton, err := tonclient.NewClient(context.Background(), config.TON.ConfigURL)
 	if err != nil {
-		logger.Printf("Failed to create TON client: %v", err)
+		logger.Error("failed to create TON client", slog.String("error", err.Error()))
 		return
 	}
 
 	providerClient, err := newProviderClient(context.Background(), config.TON.ConfigURL, config.System.ADNLPort, config.System.Key)
 	if err != nil {
-		logger.Printf("Failed to create provider client: %v", err)
+		logger.Error("failed to create provider client", slog.String("error", err.Error()))
 		return
 	}
 
 	// Postgres
 	connPool, err := connectPostgres(context.Background(), config, logger)
 	if err != nil {
-		logger.Printf("Failed to connect to Postgres: %v", err)
+		logger.Error("failed to connect to Postgres", slog.String("error", err.Error()))
 		return
 	}
 
@@ -63,20 +70,21 @@ func run() (err error) {
 	providersRepo := providersRepository.NewRepository(connPool)
 
 	// Workers
-	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache)
+	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache, logger)
 	providersMasterWorker := providersmaster.NewWorker(
 		providersRepo,
 		ton,
 		providerClient,
 		config.TON.MasterAddress,
 		config.TON.BatchSize,
+		logger,
 	)
 
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	workers := workers.NewWorkers(telemetryWorker, providersMasterWorker, logger)
 	go func() {
 		if wErr := workers.Start(cancelCtx); wErr != nil {
-			logger.Printf("Failed to start workers: %v", wErr)
+			logger.Error("failed to start workers", slog.String("error", wErr.Error()))
 			err = wErr
 			return
 		}
@@ -95,7 +103,7 @@ func run() (err error) {
 
 	go func() {
 		if err := app.Listen(":" + config.System.Port); err != nil {
-			logger.Printf("Error starting server: %v", err)
+			logger.Error("error starting server", slog.String("err", err.Error()))
 		}
 	}()
 
@@ -107,7 +115,7 @@ func run() (err error) {
 
 	err = app.ShutdownWithTimeout(time.Second * 5)
 	if err != nil {
-		logger.Printf("Server shut down error %v", err)
+		logger.Error("server shut down error", slog.String("err", err.Error()))
 		return err
 	}
 

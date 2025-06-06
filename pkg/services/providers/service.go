@@ -2,7 +2,7 @@ package providers
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"time"
 
 	"mytonprovider-backend/pkg/models"
@@ -16,7 +16,7 @@ const (
 
 type service struct {
 	providers providers
-	logger    *log.Logger
+	logger    *slog.Logger
 }
 
 type providers interface {
@@ -31,16 +31,18 @@ type Providers interface {
 }
 
 func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error) {
+	log := s.logger.With(slog.String("method", "SearchProviders"))
+
 	if len(req.Exact) > 0 {
 		if len(req.Exact) > maxProvidersLimit {
-			s.logger.Printf("Too many pubkeys in request: %d, max allowed: %d", len(req.Exact), maxProvidersLimit)
+			log.Error("too many pubkeys in request")
 			err = models.NewAppError(models.BadRequestErrorCode, "too many pubkeys in request")
 			return
 		}
 
 		p, dbErr := s.providers.GetProvidersByPubkeys(ctx, req.Exact)
 		if dbErr != nil {
-			s.logger.Printf("Failed to get providers by pubkeys: %v", dbErr)
+			log.Error("failed to get providers by pubkeys", slog.Any("pubkeys", req.Exact), slog.String("error", dbErr.Error()))
 			err = models.NewAppError(models.InternalServerErrorCode, "")
 			return
 		}
@@ -54,7 +56,7 @@ func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersReq
 
 	p, dbErr := s.providers.GetProviders(ctx, filters, sort, limit, offset)
 	if dbErr != nil {
-		s.logger.Printf("Failed to get providers: %v", dbErr)
+		log.Error("failed to get providers", slog.String("error", dbErr.Error()))
 		err = models.NewAppError(models.InternalServerErrorCode, "")
 		return
 	}
@@ -100,7 +102,7 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 				StorageGitHash:          provider.Telemetry.StorageGitHash,
 				ProviderGitHash:         provider.Telemetry.ProviderGitHash,
 				TotalProviderSpace:      provider.Telemetry.TotalProviderSpace,
-				FreeProviderSpace:       provider.Telemetry.FreeProviderSpace,
+				UsedProviderSpace:       provider.Telemetry.UsedProviderSpace,
 				CPUName:                 provider.Telemetry.CPUName,
 				CPUNumber:               provider.Telemetry.CPUNumber,
 				CPUIsVirtual:            provider.Telemetry.CPUIsVirtual,
@@ -117,6 +119,7 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			},
 		})
 	}
+
 	return providers
 }
 
@@ -188,7 +191,7 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 
 func NewService(
 	providers providers,
-	logger *log.Logger,
+	logger *slog.Logger,
 ) Providers {
 	return &service{
 		providers: providers,

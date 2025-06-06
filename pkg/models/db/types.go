@@ -115,7 +115,7 @@ type TelemetryDB struct {
 	StorageGitHash          *string  `json:"storage_git_hash"`
 	ProviderGitHash         *string  `json:"provider_git_hash"`
 	TotalProviderSpace      *float32 `json:"total_provider_space"`
-	FreeProviderSpace       *float32 `json:"free_provider_space"`
+	UsedProviderSpace       *float32 `json:"used_provider_space"`
 	CPUName                 *string  `json:"cpu_name"`
 	CPUNumber               *uint16  `json:"cpu_number"`
 	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`

@@ -3,11 +3,9 @@ package telemetry
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 	"strings"
 	"time"
-
-	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 
 	"mytonprovider-backend/pkg/cache"
 	v1 "mytonprovider-backend/pkg/models/api/v1"
@@ -21,8 +19,8 @@ type providers interface {
 
 type telemetryWorker struct {
 	providers providers
-	provider  *transport.Client
 	cache     *cache.SimpleCache
+	logger    *slog.Logger
 }
 
 type Worker interface {
@@ -34,6 +32,9 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 		successInterval = 1 * time.Minute
 		failureInterval = 5 * time.Second
 	)
+
+	logger := w.logger.With(slog.String("worker", "telemetry"))
+	logger.Debug("updating telemetry")
 
 	interval = successInterval
 
@@ -121,13 +122,13 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 		return
 	}
 
-	fmt.Println("Updating telemetry", items)
-
 	err = w.providers.UpdateTelemetry(ctx, items)
 	if err != nil {
 		interval = failureInterval
 		return
 	}
+
+	logger.Debug("telemetry updated successfully", slog.Int("count", len(items)))
 
 	return
 }
@@ -135,9 +136,11 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 func NewWorker(
 	providers providers,
 	telemetry *cache.SimpleCache,
+	logger *slog.Logger,
 ) Worker {
 	return &telemetryWorker{
 		providers: providers,
 		cache:     telemetry,
+		logger:    logger,
 	}
 }

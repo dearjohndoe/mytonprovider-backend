@@ -1,15 +1,32 @@
 package httpServer
 
+import (
+	"time"
+
+	"github.com/gofiber/fiber/v2/middleware/limiter"
+)
+
+const (
+	MaxRequests     = 100
+	RateLimitWindow = 60 * time.Second
+)
+
 func (h *handler) RegisterRoutes() {
+	h.server.Use(limiter.New(limiter.Config{
+		Max:               MaxRequests,
+		Expiration:        RateLimitWindow,
+		LimitReached:      h.limitReached,
+		LimiterMiddleware: limiter.SlidingWindow{},
+	}))
 
 	apiv1 := h.server.Group("/api/v1", h.loggerMiddleware)
 	{
-		apiv1.Post("/providers/search", h.rateLimiterMiddleware("provicers", 60), h.searchProviders)
+		apiv1.Post("/providers/search", h.searchProviders)
 
-		apiv1.Post("/providers", h.rateLimiterMiddleware("providers", 60), h.updateTelemetry)
+		apiv1.Post("/providers", h.updateTelemetry)
 
-		apiv1.Get("/providers", h.rateLimiterMiddleware("providers", 60), h.authorizationMiddleware, h.getLatestTelemetry)
+		apiv1.Get("/providers", h.authorizationMiddleware, h.getLatestTelemetry)
 	}
 
-	h.server.Get("/health", h.rateLimiterMiddleware("health", 200), h.health)
+	h.server.Get("/health", h.health)
 }
