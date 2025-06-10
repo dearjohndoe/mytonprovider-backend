@@ -89,13 +89,11 @@ func (c *client) GetTransactions(ctx context.Context, addr string, count uint32)
 			continue
 		}
 
-		// TODO: check amount?
-
 		txs = append(txs, &Transaction{
 			Hash:         t.Hash,
 			From:         msg.SrcAddr.String(),
 			Message:      comment,
-			RegisteredAt: time.Now(), // TODO: get from transaction
+			RegisteredAt: time.Unix(int64(msg.CreatedAt), 0),
 		})
 	}
 
