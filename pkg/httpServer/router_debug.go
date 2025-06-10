@@ -1,11 +1,14 @@
-//go:build !debug
-// +build !debug
+// !ONLY FOR DEBUG PURPOSES
+//
+//go:build debug
+// +build debug
 
 package httpServer
 
 import (
 	"time"
 
+	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 )
 
@@ -15,7 +18,21 @@ const (
 )
 
 func (h *handler) RegisterRoutes() {
-	h.logger.Info("Registering routes")
+	h.logger.Info("Registering debug routes")
+
+	// On server side nginx or other reverse proxy should handle CORS
+	// and OPTIONS requests, but for debug purposes we handle it here.
+	h.server.Use(func(c *fiber.Ctx) error {
+		// Always set CORS headers
+		c.Set("Access-Control-Allow-Origin", "*")
+		c.Set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS")
+		c.Set("Access-Control-Allow-Headers", "*")
+
+		if c.Method() == fiber.MethodOptions {
+			return c.SendStatus(fiber.StatusOK)
+		}
+		return c.Next()
+	})
 
 	h.server.Use(limiter.New(limiter.Config{
 		Max:               MaxRequests,

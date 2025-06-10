@@ -18,8 +18,8 @@ type Sort struct {
 type Filters struct {
 	RatingGt                  *float64 `json:"rating_gt,omitempty"`
 	RatingLt                  *float64 `json:"rating_lt,omitempty"`
-	RegTimeGtDays             *int64   `json:"reg_time_gt_days,omitempty"`
-	RegTimeLtDays             *int64   `json:"reg_time_lt_days,omitempty"`
+	RegTimeDaysGt             *int64   `json:"reg_time_days_gt,omitempty"`
+	RegTimeDaysLt             *int64   `json:"reg_time_days_lt,omitempty"`
 	UpTimeGtPercent           *float64 `json:"uptime_gt_percent,omitempty"`
 	UpTimeLtPercent           *float64 `json:"uptime_lt_percent,omitempty"`
 	WorkingTimeGtSec          *int64   `json:"working_time_gt_sec,omitempty"`
@@ -35,8 +35,8 @@ type Filters struct {
 	IsSendTelemetry           *bool    `json:"is_send_telemetry,omitempty"`
 	TotalProviderSpaceGt      *float64 `json:"total_provider_space_gt,omitempty"`
 	TotalProviderSpaceLt      *float64 `json:"total_provider_space_lt,omitempty"`
-	FreeProviderSpaceGt       *float64 `json:"free_provider_space_gt,omitempty"`
-	FreeProviderSpaceLt       *float64 `json:"free_provider_space_lt,omitempty"`
+	UsedProviderSpaceGt       *float64 `json:"used_provider_space_gt,omitempty"`
+	UsedProviderSpaceLt       *float64 `json:"used_provider_space_lt,omitempty"`
 	StorageGitHash            *string  `json:"storage_git_hash,omitempty"`
 	ProviderGitHash           *string  `json:"provider_git_hash,omitempty"`
 	CPUNumberGt               *int32   `json:"cpu_number_gt,omitempty"`
@@ -45,8 +45,8 @@ type Filters struct {
 	CPUIsVirtual              *bool    `json:"cpu_is_virtual,omitempty"`
 	TotalRamGt                *float32 `json:"total_ram_gt,omitempty"`
 	TotalRamLt                *float32 `json:"total_ram_lt,omitempty"`
-	FreeRamGt                 *float32 `json:"free_ram_gt,omitempty"`
-	FreeRamLt                 *float32 `json:"free_ram_lt,omitempty"`
+	UsageRamPercentGt         *float32 `json:"usage_ram_percent_gt,omitempty"`
+	UsageRamPercentLt         *float32 `json:"usage_ram_percent_lt,omitempty"`
 	BenchmarkDiskReadSpeedGt  *float64 `json:"benchmark_disk_read_speed_gt,omitempty"`
 	BenchmarkDiskReadSpeedLt  *float64 `json:"benchmark_disk_read_speed_lt,omitempty"`
 	BenchmarkDiskWriteSpeedGt *float64 `json:"benchmark_disk_write_speed_gt,omitempty"`
@@ -138,7 +138,8 @@ type Telemetry struct {
 	CPUNumber               *uint16  `json:"cpu_number"`
 	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`
 	TotalRAM                *float32 `json:"total_ram"`
-	FreeRAM                 *float32 `json:"free_ram"`
+	UsageRAM                *float32 `json:"usage_ram"`
+	UsageRAMPercent         *float32 `json:"ram_usage_percent"`
 	BenchmarkDiskReadSpeed  *float32 `json:"benchmark_disk_read_speed"`
 	BenchmarkDiskWriteSpeed *float32 `json:"benchmark_disk_write_speed"`
 	BenchmarkRocksOps       *int32   `json:"benchmark_rocks_ops"`

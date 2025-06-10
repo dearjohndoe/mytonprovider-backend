@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -16,7 +17,7 @@ type repository struct {
 
 type Repository interface {
 	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) ([]db.ProviderDB, error)
-	GetProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.ProviderDB, error)
+	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.ProviderDB, error)
 	UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
 	UpdateUptime(ctx context.Context) (err error)
@@ -30,10 +31,10 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 	query := `
 		SELECT 
 			p.public_key,
-			p.uptime,
+			p.uptime * 100 as uptime,
 			p.rating,
 			p.max_span,
-			p.rate_per_mb_per_day,
+			GREATEST(p.rate_per_mb_per_day, p.min_bounty) as price,
 			p.min_span,
 			0,                  -- p.max_bag_size_bytes ???
 			p.registered_at,
@@ -46,7 +47,8 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			t.cpu_number,
 			t.cpu_is_virtual,
 			t.total_ram,
-			t.free_ram,
+			t.usage_ram,
+			t.ram_usage_percent,
 			t.benchmark_disk_read_speed,
 			t.benchmark_disk_write_speed,
 			t.benchmark_rocks_ops,
@@ -78,46 +80,14 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 	return
 }
 
-func (r *repository) GetProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) (resp []db.ProviderDB, err error) {
-	query := `
-		SELECT 
-			p.public_key,
-			p.uptime,
-			p.rating,
-			p.max_span,
-			p.rate_per_mb_per_day,
-			p.min_span,
-			0,                  -- p.max_bag_size_bytes ???
-			p.registered_at,
-			coalesce(p.is_send_telemetry, false) as is_send_telemetry,
-			t.storage_git_hash,
-			t.provider_git_hash,
-			t.total_provider_space,
-			t.total_provider_space - t.used_provider_space as free_provider_space,
-			t.cpu_name,
-			t.cpu_number,
-			t.cpu_is_virtual,
-			t.total_ram,
-			t.free_ram,
-			t.benchmark_disk_read_speed,
-			t.benchmark_disk_write_speed,
-			t.benchmark_rocks_ops,
-			t.speedtest_download_speed,
-			t.speedtest_upload_speed,
-			t.speedtest_ping,
-			t.country,
-			t.isp
-		FROM providers.providers p
-		    JOIN providers.statuses s ON p.public_key = s.public_key
-			LEFT JOIN providers.telemetry t ON p.public_key = t.public_key
-		WHERE p.is_initialized 
-			AND s.is_online 
-			AND s.check_time > NOW() - INTERVAL '1 hour'
-		LIMIT $1
-		OFFSET $2;
-	`
+func (r *repository) GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) (resp []db.ProviderDB, err error) {
+	var filtersStr string
+	args := []any{limit, offset}
 
-	rows, err := r.db.Query(ctx, query, limit, offset)
+	filtersStr, args = filtersToCondition(filters, args)
+	query := fmt.Sprintf(providersQuerySelect, filtersStr)
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			err = nil
@@ -176,9 +146,9 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			used_provider_space,
 			total_provider_space,
 			total_swap,
-			free_swap,
+			usage_swap,
 			swap_usage_percent,
-			free_ram,
+			usage_ram,
 			total_ram,
 			ram_usage_percent,
 			cpu_number,
@@ -214,9 +184,9 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			(t->>'used_provider_space')::float8,
 			(t->>'total_provider_space')::float8,
 			(t->>'total_swap')::float4,
-			(t->>'free_swap')::float4,
+			(t->>'usage_swap')::float4,
 			(t->>'swap_usage_percent')::float4,
-			(t->>'free_ram')::float4,
+			(t->>'usage_ram')::float4,
 			(t->>'total_ram')::float4,
 			(t->>'ram_usage_percent')::float4,
 			(t->>'cpu_number')::int4,
@@ -249,9 +219,9 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			used_provider_space = EXCLUDED.used_provider_space,
 			total_provider_space = EXCLUDED.total_provider_space,
 			total_swap = EXCLUDED.total_swap,
-			free_swap = EXCLUDED.free_swap,
+			usage_swap = EXCLUDED.usage_swap,
 			swap_usage_percent = EXCLUDED.swap_usage_percent,
-			free_ram = EXCLUDED.free_ram,
+			usage_ram = EXCLUDED.usage_ram,
 			total_ram = EXCLUDED.total_ram,
 			ram_usage_percent = EXCLUDED.ram_usage_percent,
 			cpu_number = EXCLUDED.cpu_number,
@@ -299,13 +269,9 @@ func (r *repository) UpdateUptime(ctx context.Context) (err error) {
 		SET uptime = COALESCE((SELECT pu.online::float8 / pu.total), 0)
 		FROM provider_uptime pu
 		WHERE p.public_key = pu.public_key
-		RETURNING p.public_key, p.uptime
 	`
 
-	_, err = r.db.Query(ctx, query)
-	if err != nil {
-		return
-	}
+	_, err = r.db.Exec(ctx, query)
 
 	return
 }
@@ -466,7 +432,8 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 			&provider.Telemetry.CPUNumber,
 			&provider.Telemetry.CPUIsVirtual,
 			&provider.Telemetry.TotalRAM,
-			&provider.Telemetry.FreeRAM,
+			&provider.Telemetry.UsageRAM,
+			&provider.Telemetry.UsageRAMPercent,
 			&provider.Telemetry.BenchmarkDiskReadSpeed,
 			&provider.Telemetry.BenchmarkDiskWriteSpeed,
 			&provider.Telemetry.BenchmarkRocksOps,

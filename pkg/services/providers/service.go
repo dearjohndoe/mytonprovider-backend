@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"time"
 
+	"mytonprovider-backend/pkg/constants"
 	"mytonprovider-backend/pkg/models"
 	v1 "mytonprovider-backend/pkg/models/api/v1"
 	"mytonprovider-backend/pkg/models/db"
@@ -21,7 +22,7 @@ type service struct {
 
 type providers interface {
 	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) ([]db.ProviderDB, error)
-	GetProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.ProviderDB, error)
+	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.ProviderDB, error)
 }
 
 type Providers interface {
@@ -34,34 +35,11 @@ func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersReq
 	log := s.logger.With(slog.String("method", "SearchProviders"))
 
 	if len(req.Exact) > 0 {
-		if len(req.Exact) > maxProvidersLimit {
-			log.Error("too many pubkeys in request")
-			err = models.NewAppError(models.BadRequestErrorCode, "too many pubkeys in request")
-			return
-		}
-
-		p, dbErr := s.providers.GetProvidersByPubkeys(ctx, req.Exact)
-		if dbErr != nil {
-			log.Error("failed to get providers by pubkeys", slog.Any("pubkeys", req.Exact), slog.String("error", dbErr.Error()))
-			err = models.NewAppError(models.InternalServerErrorCode, "")
-			return
-		}
-
-		providers = convertDBProvidersToAPI(p)
-
+		providers, err = s.getExactProviders(ctx, req.Exact, log)
 		return
 	}
 
-	filters, sort, limit, offset := buildProviderQueryParams(req)
-
-	p, dbErr := s.providers.GetProviders(ctx, filters, sort, limit, offset)
-	if dbErr != nil {
-		log.Error("failed to get providers", slog.String("error", dbErr.Error()))
-		err = models.NewAppError(models.InternalServerErrorCode, "")
-		return
-	}
-
-	providers = convertDBProvidersToAPI(p)
+	providers, err = s.getFilteredProviders(ctx, req, log)
 
 	return
 }
@@ -80,6 +58,40 @@ func (s *service) UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRe
 	// logic in cache middleware
 
 	return nil
+}
+
+func (s *service) getExactProviders(ctx context.Context, pubkeys []string, log *slog.Logger) (providers []v1.Provider, err error) {
+	if len(pubkeys) > maxProvidersLimit {
+		log.Error("too many pubkeys in request")
+		err = models.NewAppError(models.BadRequestErrorCode, "too many pubkeys in request")
+		return
+	}
+
+	p, dbErr := s.providers.GetProvidersByPubkeys(ctx, pubkeys)
+	if dbErr != nil {
+		log.Error("failed to get providers by pubkeys", slog.Any("pubkeys", pubkeys), slog.String("error", dbErr.Error()))
+		err = models.NewAppError(models.InternalServerErrorCode, "")
+		return
+	}
+
+	providers = convertDBProvidersToAPI(p)
+
+	return
+}
+
+func (s *service) getFilteredProviders(ctx context.Context, req v1.SearchProvidersRequest, log *slog.Logger) (providers []v1.Provider, err error) {
+	filters, sort, limit, offset := buildProviderQueryParams(req)
+
+	p, dbErr := s.providers.GetFilteredProviders(ctx, filters, sort, limit, offset)
+	if dbErr != nil {
+		log.Error("failed to get providers", slog.String("error", dbErr.Error()))
+		err = models.NewAppError(models.InternalServerErrorCode, "")
+		return
+	}
+
+	providers = convertDBProvidersToAPI(p)
+
+	return
 }
 
 func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
@@ -107,7 +119,8 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 				CPUNumber:               provider.Telemetry.CPUNumber,
 				CPUIsVirtual:            provider.Telemetry.CPUIsVirtual,
 				TotalRAM:                provider.Telemetry.TotalRAM,
-				FreeRAM:                 provider.Telemetry.FreeRAM,
+				UsageRAM:                provider.Telemetry.UsageRAM,
+				UsageRAMPercent:         provider.Telemetry.UsageRAMPercent,
 				BenchmarkDiskReadSpeed:  provider.Telemetry.BenchmarkDiskReadSpeed,
 				BenchmarkDiskWriteSpeed: provider.Telemetry.BenchmarkDiskWriteSpeed,
 				BenchmarkRocksOps:       provider.Telemetry.BenchmarkRocksOps,
@@ -127,8 +140,8 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 	filters := db.ProviderFilters{
 		RatingGt:                  req.Filters.RatingGt,
 		RatingLt:                  req.Filters.RatingLt,
-		RegTimeGtDays:             req.Filters.RegTimeGtDays,
-		RegTimeLtDays:             req.Filters.RegTimeLtDays,
+		RegTimeDaysGt:             req.Filters.RegTimeDaysGt,
+		RegTimeDaysLt:             req.Filters.RegTimeDaysLt,
 		UpTimeGtPercent:           req.Filters.UpTimeGtPercent,
 		UpTimeLtPercent:           req.Filters.UpTimeLtPercent,
 		WorkingTimeGtSec:          req.Filters.WorkingTimeGtSec,
@@ -144,8 +157,8 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 		IsSendTelemetry:           req.Filters.IsSendTelemetry,
 		TotalProviderSpaceGt:      req.Filters.TotalProviderSpaceGt,
 		TotalProviderSpaceLt:      req.Filters.TotalProviderSpaceLt,
-		FreeProviderSpaceGt:       req.Filters.FreeProviderSpaceGt,
-		FreeProviderSpaceLt:       req.Filters.FreeProviderSpaceLt,
+		UsedProviderSpaceGt:       req.Filters.UsedProviderSpaceGt,
+		UsedProviderSpaceLt:       req.Filters.UsedProviderSpaceLt,
 		StorageGitHash:            req.Filters.StorageGitHash,
 		ProviderGitHash:           req.Filters.ProviderGitHash,
 		CPUNumberGt:               req.Filters.CPUNumberGt,
@@ -154,8 +167,8 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 		CPUIsVirtual:              req.Filters.CPUIsVirtual,
 		TotalRamGt:                req.Filters.TotalRamGt,
 		TotalRamLt:                req.Filters.TotalRamLt,
-		FreeRamGt:                 req.Filters.FreeRamGt,
-		FreeRamLt:                 req.Filters.FreeRamLt,
+		UsageRamPercentGt:         req.Filters.UsageRamPercentGt,
+		UsageRamPercentLt:         req.Filters.UsageRamPercentLt,
 		BenchmarkDiskReadSpeedGt:  req.Filters.BenchmarkDiskReadSpeedGt,
 		BenchmarkDiskReadSpeedLt:  req.Filters.BenchmarkDiskReadSpeedLt,
 		BenchmarkDiskWriteSpeedGt: req.Filters.BenchmarkDiskWriteSpeedGt,
@@ -172,9 +185,17 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 		ISP:                       req.Filters.ISP,
 	}
 
+	sortColumn := constants.RatingColumn
+	if v, ok := constants.SortingMap[req.Sort.Column]; ok {
+		sortColumn = v
+	}
+	order := constants.Asc
+	if v, ok := constants.OrderMap[req.Sort.Order]; ok {
+		order = v
+	}
 	sort := db.ProviderSort{
-		Column: req.Sort.Column,
-		Order:  req.Sort.Order,
+		Column: sortColumn,
+		Order:  order,
 	}
 
 	limit := req.Limit
