@@ -63,6 +63,9 @@ chown "$NEWSUDOUSER":"$NEWSUDOUSER" /home/"$NEWSUDOUSER"/.ssh
 cp /root/.ssh/authorized_keys /home/"$NEWSUDOUSER"/.ssh/
 chmod 600 /home/"$NEWSUDOUSER"/.ssh/authorized_keys
 chown "$NEWSUDOUSER":"$NEWSUDOUSER" /home/"$NEWSUDOUSER"/.ssh/authorized_keys
+chown -R "$NEWSUDOUSER":"$NEWSUDOUSER" /opt/provider
+chown -R "$NEWSUDOUSER":"$NEWSUDOUSER" /var/www/mytonprovider.org
+chown -R "$NEWSUDOUSER":"$NEWSUDOUSER" /var/log/mytonprovider.app
 echo "$NEWSUDOUSER:$PASSWORD" | chpasswd
 
 echo "Disabling root login..."

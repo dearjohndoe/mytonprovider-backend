@@ -45,6 +45,7 @@ func run() (err error) {
 		Level: logLevel,
 	}))
 	telemetryCache := simpleCache.NewSimpleCache(2 * time.Minute)
+	benchmarksCache := simpleCache.NewSimpleCache(10 * time.Minute)
 
 	// TON
 	ton, err := tonclient.NewClient(context.Background(), config.TON.ConfigURL)
@@ -70,7 +71,7 @@ func run() (err error) {
 	providersRepo := providersRepository.NewRepository(connPool)
 
 	// Workers
-	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache, logger)
+	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache, benchmarksCache, logger)
 	providersMasterWorker := providersmaster.NewWorker(
 		providersRepo,
 		ton,
@@ -91,13 +92,13 @@ func run() (err error) {
 	}()
 
 	// Services
-	filesService := providers.NewService(providersRepo, logger)
-	filesService = providers.NewCacheMiddleware(filesService, telemetryCache)
+	providersService := providers.NewService(providersRepo, logger)
+	providersService = providers.NewCacheMiddleware(providersService, telemetryCache, benchmarksCache)
 
 	// HTTP Server
 	accessTokens := strings.Split(config.System.AccessTokens, ",")
 	app := fiber.New()
-	server := httpServer.New(app, filesService, accessTokens, logger)
+	server := httpServer.New(app, providersService, accessTokens, logger)
 
 	server.RegisterRoutes()
 

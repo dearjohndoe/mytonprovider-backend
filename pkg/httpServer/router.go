@@ -30,6 +30,8 @@ func (h *handler) RegisterRoutes() {
 
 		apiv1.Post("/providers", h.updateTelemetry)
 
+		apiv1.Post("/benchmarks", h.updateBenchmarks)
+
 		apiv1.Get("/providers", h.authorizationMiddleware, h.getLatestTelemetry)
 	}
 

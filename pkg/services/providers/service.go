@@ -29,6 +29,7 @@ type Providers interface {
 	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error)
 	GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error)
 	UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error)
+	UpdateBenchmarks(ctx context.Context, benchmark *v1.BenchmarksRequest) (err error)
 }
 
 func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error) {
@@ -52,6 +53,16 @@ func (s *service) GetLatestTelemetry(ctx context.Context) (providers []v1.Teleme
 
 func (s *service) UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error) {
 	if telemetry == nil || telemetry.Storage.Provider.PubKey == "" {
+		return models.NewAppError(models.BadRequestErrorCode, "")
+	}
+
+	// logic in cache middleware
+
+	return nil
+}
+
+func (s *service) UpdateBenchmarks(ctx context.Context, benchmark *v1.BenchmarksRequest) (err error) {
+	if benchmark == nil || benchmark.PubKey == "" {
 		return models.NewAppError(models.BadRequestErrorCode, "")
 	}
 
@@ -123,9 +134,8 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 				UsageRAMPercent:         provider.Telemetry.UsageRAMPercent,
 				BenchmarkDiskReadSpeed:  provider.Telemetry.BenchmarkDiskReadSpeed,
 				BenchmarkDiskWriteSpeed: provider.Telemetry.BenchmarkDiskWriteSpeed,
-				BenchmarkRocksOps:       provider.Telemetry.BenchmarkRocksOps,
-				SpeedtestDownloadSpeed:  provider.Telemetry.SpeedtestDownloadSpeed,
-				SpeedtestUploadSpeed:    provider.Telemetry.SpeedtestUploadSpeed,
+				SpeedtestDownload:       provider.Telemetry.SpeedtestDownload,
+				SpeedtestUpload:         provider.Telemetry.SpeedtestUpload,
 				SpeedtestPing:           provider.Telemetry.SpeedtestPing,
 				Country:                 provider.Telemetry.Country,
 				ISP:                     provider.Telemetry.ISP,
@@ -173,8 +183,6 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 		BenchmarkDiskReadSpeedLt:  req.Filters.BenchmarkDiskReadSpeedLt,
 		BenchmarkDiskWriteSpeedGt: req.Filters.BenchmarkDiskWriteSpeedGt,
 		BenchmarkDiskWriteSpeedLt: req.Filters.BenchmarkDiskWriteSpeedLt,
-		BenchmarkRocksOpsGt:       req.Filters.BenchmarkRocksOpsGt,
-		BenchmarkRocksOpsLt:       req.Filters.BenchmarkRocksOpsLt,
 		SpeedtestDownloadSpeedGt:  req.Filters.SpeedtestDownloadSpeedGt,
 		SpeedtestDownloadSpeedLt:  req.Filters.SpeedtestDownloadSpeedLt,
 		SpeedtestUploadSpeedGt:    req.Filters.SpeedtestUploadSpeedGt,

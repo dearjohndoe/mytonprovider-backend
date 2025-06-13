@@ -51,8 +51,6 @@ type Filters struct {
 	BenchmarkDiskReadSpeedLt  *float64 `json:"benchmark_disk_read_speed_lt,omitempty"`
 	BenchmarkDiskWriteSpeedGt *float64 `json:"benchmark_disk_write_speed_gt,omitempty"`
 	BenchmarkDiskWriteSpeedLt *float64 `json:"benchmark_disk_write_speed_lt,omitempty"`
-	BenchmarkRocksOpsGt       *float64 `json:"benchmark_rocks_ops_gt,omitempty"`
-	BenchmarkRocksOpsLt       *float64 `json:"benchmark_rocks_ops_lt,omitempty"`
 	SpeedtestDownloadSpeedGt  *float64 `json:"speedtest_download_speed_gt,omitempty"`
 	SpeedtestDownloadSpeedLt  *float64 `json:"speedtest_download_speed_lt,omitempty"`
 	SpeedtestUploadSpeedGt    *float64 `json:"speedtest_upload_speed_gt,omitempty"`
@@ -75,8 +73,62 @@ type TelemetryRequest struct {
 	Swap             MemoryInfo         `json:"swap"`
 	Uname            UnameInfo          `json:"uname"`
 	CPUInfo          CPUInfo            `json:"cpu_info"`
-	Pings            map[string]float64 `json:"pings"`
+	Pings            map[string]float32 `json:"pings"`
 	Benchmark        interface{}        `json:"benchmark"`
+}
+
+type DiskBenchmark struct {
+	Name      string `json:"name"`
+	Read      string `json:"read"`
+	Write     string `json:"write"`
+	ReadIOPS  string `json:"read_iops"`
+	WriteIOPS string `json:"write_iops"`
+}
+
+type ClientInfo struct {
+	Country        string `json:"country"`
+	IP             string `json:"ip"`
+	ISP            string `json:"isp"`
+	ISPDownloadAvg string `json:"ispdlavg"`
+	ISPUploadAvg   string `json:"ispulavg"`
+	ISPRating      string `json:"isprating"`
+	Lat            string `json:"lat"`
+	Lon            string `json:"lon"`
+	LoggedIn       string `json:"loggedin"`
+	Rating         string `json:"rating"`
+}
+
+type ServerInfo struct {
+	CC      string  `json:"cc"`
+	Country string  `json:"country"`
+	D       float64 `json:"d"`
+	Host    string  `json:"host"`
+	ID      string  `json:"id"`
+	Lat     string  `json:"lat"`
+	Lon     string  `json:"lon"`
+	Name    string  `json:"name"`
+	Sponsor string  `json:"sponsor"`
+	URL     string  `json:"url"`
+	Latency float32 `json:"latency"`
+}
+
+type NetworkBenchmark struct {
+	Server        ServerInfo `json:"server"`
+	Client        ClientInfo `json:"client"`
+	Share         string     `json:"share"`
+	Timestamp     string     `json:"timestamp"` // RFC3339
+	BytesReceived uint64     `json:"bytes_received"`
+	BytesSent     uint64     `json:"bytes_sent"`
+	Download      float64    `json:"download"`
+	Upload        float64    `json:"upload"`
+	Ping          float32    `json:"ping"`
+}
+
+type BenchmarksRequest struct {
+	PubKey    string                   `json:"pubkey"`
+	Disk      map[string]DiskBenchmark `json:"disk"`
+	Network   NetworkBenchmark         `json:"network"`
+	Timestamp int64                    `json:"timestamp"` // Unix timestamp in seconds
 }
 
 type ProviderInfo struct {
@@ -132,22 +184,21 @@ type BenchmarkInfo struct {
 type Telemetry struct {
 	StorageGitHash          *string  `json:"storage_git_hash"`
 	ProviderGitHash         *string  `json:"provider_git_hash"`
+	BenchmarkDiskReadSpeed  *string  `json:"qd64_disk_read_speed"`
+	BenchmarkDiskWriteSpeed *string  `json:"qd64_disk_write_speed"`
+	Country                 *string  `json:"country"`
+	ISP                     *string  `json:"isp"`
+	CPUName                 *string  `json:"cpu_name"`
 	TotalProviderSpace      *float32 `json:"total_provider_space"`
 	UsedProviderSpace       *float32 `json:"used_provider_space"`
-	CPUName                 *string  `json:"cpu_name"`
-	CPUNumber               *uint16  `json:"cpu_number"`
-	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`
 	TotalRAM                *float32 `json:"total_ram"`
 	UsageRAM                *float32 `json:"usage_ram"`
 	UsageRAMPercent         *float32 `json:"ram_usage_percent"`
-	BenchmarkDiskReadSpeed  *float32 `json:"benchmark_disk_read_speed"`
-	BenchmarkDiskWriteSpeed *float32 `json:"benchmark_disk_write_speed"`
-	BenchmarkRocksOps       *int32   `json:"benchmark_rocks_ops"`
-	SpeedtestDownloadSpeed  *float32 `json:"speedtest_download_speed"`
-	SpeedtestUploadSpeed    *float32 `json:"speedtest_upload_speed"`
+	SpeedtestDownload       *float32 `json:"speedtest_download"`
+	SpeedtestUpload         *float32 `json:"speedtest_upload"`
 	SpeedtestPing           *float32 `json:"speedtest_ping"`
-	Country                 *string  `json:"country"`
-	ISP                     *string  `json:"isp"`
+	CPUNumber               *uint16  `json:"cpu_number"`
+	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`
 }
 
 type Provider struct {
@@ -156,7 +207,7 @@ type Provider struct {
 	WorkingTime uint64  `json:"working_time"`
 	Rating      float32 `json:"rating"`
 	MaxSpan     uint32  `json:"max_span"`
-	Price       uint32  `json:"price"`
+	Price       uint64  `json:"price"`
 
 	MinSpan         uint32    `json:"min_span"`
 	MaxBagSizeBytes uint64    `json:"max_bag_size_bytes"`

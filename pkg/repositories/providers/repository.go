@@ -19,6 +19,7 @@ type Repository interface {
 	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) ([]db.ProviderDB, error)
 	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.ProviderDB, error)
 	UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error)
+	UpdateBenchmarks(ctx context.Context, benchmarks []db.BenchmarkUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
 	UpdateUptime(ctx context.Context) (err error)
 	UpdateRating(ctx context.Context) (err error)
@@ -31,10 +32,10 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 	query := `
 		SELECT 
 			p.public_key,
-			p.uptime * 100 as uptime,
-			p.rating,
+			COALESCE(p.uptime, 0) * 100 as uptime,
+			COALESCE(p.rating, 0) as rating,
 			p.max_span,
-			GREATEST(p.rate_per_mb_per_day, p.min_bounty) as price,
+			GREATEST(p.rate_per_mb_per_day * 1024 * 200 * 30) as price,
 			p.min_span,
 			0,                  -- p.max_bag_size_bytes ???
 			p.registered_at,
@@ -49,16 +50,16 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			t.total_ram,
 			t.usage_ram,
 			t.ram_usage_percent,
-			t.benchmark_disk_read_speed,
-			t.benchmark_disk_write_speed,
-			t.benchmark_rocks_ops,
-			t.speedtest_download_speed,
-			t.speedtest_upload_speed,
-			t.speedtest_ping,
-			t.country,
-			t.isp
+			b.qd64_disk_read_speed,
+			b.qd64_disk_write_speed,
+			b.speedtest_download,
+			b.speedtest_upload,
+			b.speedtest_ping,
+			b.country,
+			b.isp
 		FROM providers.providers p
 			LEFT JOIN providers.telemetry t ON p.public_key = t.public_key
+			LEFT JOIN providers.benchmarks b ON p.public_key = b.public_key
 		WHERE p.public_key = ANY($1::text[])`
 
 	rows, err := r.db.Query(ctx, query, pubkeys)
@@ -85,7 +86,8 @@ func (r *repository) GetFilteredProviders(ctx context.Context, filters db.Provid
 	args := []any{limit, offset}
 
 	filtersStr, args = filtersToCondition(filters, args)
-	query := fmt.Sprintf(providersQuerySelect, filtersStr)
+	sortingStr := sortToCondition(sort)
+	query := fmt.Sprintf(providersQuerySelect, filtersStr, sortingStr)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -123,10 +125,7 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			storage_git_hash,
 			provider_git_hash,
 			cpu_name,
-			country,
-			isp,
 			pings,
-			benchmarks,
 			cpu_product_name,
 			uname_sysname,
 			uname_release,
@@ -137,12 +136,6 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			total_space,
 			free_space,
 			used_space,
-			benchmark_disk_read_speed,
-			benchmark_disk_write_speed,
-			benchmark_rocks_ops,
-			speedtest_download_speed,
-			speedtest_upload_speed,
-			speedtest_ping,
 			used_provider_space,
 			total_provider_space,
 			total_swap,
@@ -159,10 +152,7 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			t->>'storage_git_hash',
 			t->>'provider_git_hash',
 			t->>'cpu_name',
-			t->>'country',
-			t->>'isp',
 			t->>'pings',
-			t->>'benchmarks',
 			t->>'cpu_product_name',
 			t->>'uname_sysname',
 			t->>'uname_release',
@@ -175,12 +165,6 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			(t->>'total_space')::double precision,
 			(t->>'used_space')::double precision,
 			(t->>'free_space')::double precision,
-			(t->>'benchmark_disk_read_speed')::bigint,
-			(t->>'benchmark_disk_write_speed')::bigint,
-			(t->>'benchmark_rocks_ops')::bigint,
-			(t->>'speedtest_download_speed')::float8,
-			(t->>'speedtest_upload_speed')::float8,
-			(t->>'speedtest_ping')::float8,
 			(t->>'used_provider_space')::float8,
 			(t->>'total_provider_space')::float8,
 			(t->>'total_swap')::float4,
@@ -196,10 +180,7 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			storage_git_hash = EXCLUDED.storage_git_hash,
 			provider_git_hash = EXCLUDED.provider_git_hash,
 			cpu_name = EXCLUDED.cpu_name,
-			country = EXCLUDED.country,
-			isp = EXCLUDED.isp,
 			pings = EXCLUDED.pings,
-			benchmarks = EXCLUDED.benchmarks,
 			cpu_product_name = EXCLUDED.cpu_product_name,
 			uname_sysname = EXCLUDED.uname_sysname,
 			uname_release = EXCLUDED.uname_release,
@@ -210,12 +191,6 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			total_space = EXCLUDED.total_space,
 			free_space = EXCLUDED.free_space,
 			used_space = EXCLUDED.used_space,
-			benchmark_disk_read_speed = EXCLUDED.benchmark_disk_read_speed,
-			benchmark_disk_write_speed = EXCLUDED.benchmark_disk_write_speed,
-			benchmark_rocks_ops = EXCLUDED.benchmark_rocks_ops,
-			speedtest_download_speed = EXCLUDED.speedtest_download_speed,
-			speedtest_upload_speed = EXCLUDED.speedtest_upload_speed,
-			speedtest_ping = EXCLUDED.speedtest_ping,
 			used_provider_space = EXCLUDED.used_provider_space,
 			total_provider_space = EXCLUDED.total_provider_space,
 			total_swap = EXCLUDED.total_swap,
@@ -229,6 +204,56 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 	`
 
 	_, err = r.db.Exec(ctx, query, telemetry)
+
+	return
+}
+
+func (r *repository) UpdateBenchmarks(ctx context.Context, benchmarks []db.BenchmarkUpdate) (err error) {
+	if len(benchmarks) == 0 {
+		return
+	}
+
+	query := `
+		INSERT INTO providers.benchmarks (
+			public_key,
+			disk,
+			network,
+			qd64_disk_read_speed,
+			qd64_disk_write_speed,
+			benchmark_timestamp,
+			speedtest_download,
+			speedtest_upload,
+			speedtest_ping,
+			country,
+			isp
+		)
+			SELECT
+				b->>'public_key',
+				(b->>'disk')::jsonb,
+				(b->>'network')::jsonb,
+				b->>'qd64_disk_read_speed',
+				b->>'qd64_disk_write_speed',
+				(b->>'benchmark_timestamp')::timestamptz,
+				(b->>'speedtest_download')::double precision,
+				(b->>'speedtest_upload')::double precision,
+				(b->>'speedtest_ping')::float8,
+				b->>'country',
+				b->>'isp'
+			FROM jsonb_array_elements($1::jsonb) AS b
+			ON CONFLICT (public_key) DO UPDATE SET
+				disk = EXCLUDED.disk,
+				network = EXCLUDED.network,
+				qd64_disk_read_speed = EXCLUDED.qd64_disk_read_speed,
+				qd64_disk_write_speed = EXCLUDED.qd64_disk_write_speed,
+				benchmark_timestamp = EXCLUDED.benchmark_timestamp,
+				speedtest_download = EXCLUDED.speedtest_download,
+				speedtest_upload = EXCLUDED.speedtest_upload,
+				speedtest_ping = EXCLUDED.speedtest_ping,
+				country = EXCLUDED.country,
+				isp = EXCLUDED.isp
+	`
+
+	_, err = r.db.Exec(ctx, query, benchmarks)
 
 	return
 }
@@ -292,7 +317,6 @@ func (r *repository) UpdateRating(ctx context.Context) (err error) {
 				t.total_ram,
 				t.benchmark_disk_write_speed,
 				t.benchmark_disk_read_speed,
-				t.benchmark_rocks_ops,
 				t.speedtest_download_speed,
 				t.speedtest_upload_speed,
 				t.speedtest_ping
@@ -311,7 +335,6 @@ func (r *repository) UpdateRating(ctx context.Context) (err error) {
 				0.0000006 * COALESCE(pr.total_ram, 0) +
 				0.00008 * COALESCE(pr.benchmark_disk_write_speed, 0) +
 				0.00008 * COALESCE(pr.benchmark_disk_read_speed, 0) +
-				0.0002 * COALESCE(pr.benchmark_rocks_ops, 0) +
 				0.00001 * COALESCE(pr.speedtest_download_speed, 0) +
 				0.00004 * COALESCE(pr.speedtest_upload_speed, 0) +
 				CASE WHEN COALESCE(pr.speedtest_ping, 0) > 0 THEN 400 / pr.speedtest_ping ELSE 0 END
@@ -436,9 +459,8 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 			&provider.Telemetry.UsageRAMPercent,
 			&provider.Telemetry.BenchmarkDiskReadSpeed,
 			&provider.Telemetry.BenchmarkDiskWriteSpeed,
-			&provider.Telemetry.BenchmarkRocksOps,
-			&provider.Telemetry.SpeedtestDownloadSpeed,
-			&provider.Telemetry.SpeedtestUploadSpeed,
+			&provider.Telemetry.SpeedtestDownload,
+			&provider.Telemetry.SpeedtestUpload,
 			&provider.Telemetry.SpeedtestPing,
 			&provider.Telemetry.Country,
 			&provider.Telemetry.ISP); err != nil {

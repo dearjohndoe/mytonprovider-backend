@@ -52,8 +52,6 @@ type ProviderFilters struct {
 	BenchmarkDiskReadSpeedLt  *float64 `json:"benchmark_disk_read_speed_lt,omitempty"`
 	BenchmarkDiskWriteSpeedGt *float64 `json:"benchmark_disk_write_speed_gt,omitempty"`
 	BenchmarkDiskWriteSpeedLt *float64 `json:"benchmark_disk_write_speed_lt,omitempty"`
-	BenchmarkRocksOpsGt       *float64 `json:"benchmark_rocks_ops_gt,omitempty"`
-	BenchmarkRocksOpsLt       *float64 `json:"benchmark_rocks_ops_lt,omitempty"`
 	SpeedtestDownloadSpeedGt  *float64 `json:"speedtest_download_speed_gt,omitempty"`
 	SpeedtestDownloadSpeedLt  *float64 `json:"speedtest_download_speed_lt,omitempty"`
 	SpeedtestUploadSpeedGt    *float64 `json:"speedtest_upload_speed_gt,omitempty"`
@@ -74,62 +72,66 @@ type ProviderStatusUpdate struct {
 	IsOnline bool   `json:"is_online"`
 }
 
+type BenchmarkUpdate struct {
+	PublicKey          string  `json:"public_key" db:"public_key"`
+	Disk               string  `json:"disk" db:"disk"`
+	Network            string  `json:"network" db:"network"`
+	DiskReadSpeed      string  `json:"qd64_disk_read_speed" db:"qd64_disk_read_speed"`   // MiB/s
+	DiskWriteSpeed     string  `json:"qd64_disk_write_speed" db:"qd64_disk_write_speed"` // MiB/s
+	BenchmarkTimestamp string  `json:"benchmark_timestamp" db:"benchmark_timestamp"`     // RFC3339
+	SpeedtestDownload  float64 `json:"speedtest_download" db:"speedtest_download"`
+	SpeedtestUpload    float64 `json:"speedtest_upload" db:"speedtest_upload"`
+	SpeedtestPing      float32 `json:"speedtest_ping" db:"speedtest_ping"` // ms
+	Country            string  `json:"country" db:"country"`
+	ISP                string  `json:"isp" db:"isp"`
+}
+
 type TelemetryUpdate struct {
-	PublicKey               string    `json:"public_key" db:"public_key"`
-	StorageGitHash          string    `json:"storage_git_hash" db:"storage_git_hash"`
-	ProviderGitHash         string    `json:"provider_git_hash" db:"provider_git_hash"`
-	CPUName                 string    `json:"cpu_name" db:"cpu_name"`
-	Country                 string    `json:"country" db:"country"`
-	ISP                     string    `json:"isp" db:"isp"`
-	Pings                   string    `json:"pings" db:"pings"`
-	Benchmarks              string    `json:"benchmarks" db:"benchmarks"`
-	CPUProductName          string    `json:"cpu_product_name" db:"cpu_product_name"`
-	USysname                string    `json:"uname_sysname" db:"uname_sysname"`
-	URelease                string    `json:"uname_release" db:"uname_release"`
-	UVersion                string    `json:"uname_version" db:"uname_version"`
-	UMachine                string    `json:"uname_machine" db:"uname_machine"`
-	DiskName                string    `json:"disk_name" db:"disk_name"`
-	CPULoad                 []float32 `json:"cpu_load" db:"cpu_load"`
-	TotalDiskSpace          float64   `json:"total_space" db:"total_space"`
-	FreeDiskSpace           float64   `json:"free_space" db:"free_space"`
-	UsedDiskSpace           float64   `json:"used_space" db:"used_space"`
-	BenchmarkDiskReadSpeed  int64     `json:"benchmark_disk_read_speed" db:"benchmark_disk_read_speed"`
-	BenchmarkDiskWriteSpeed int64     `json:"benchmark_disk_write_speed" db:"benchmark_disk_write_speed"`
-	BenchmarkRocksOps       int64     `json:"benchmark_rocks_ops" db:"benchmark_rocks_ops"`
-	SpeedtestDownloadSpeed  float64   `json:"speedtest_download_speed" db:"speedtest_download_speed"`
-	SpeedtestUploadSpeed    float64   `json:"speedtest_upload_speed" db:"speedtest_upload_speed"`
-	SpeedtestPing           float64   `json:"speedtest_ping" db:"speedtest_ping"`
-	UsedProviderSpace       float64   `json:"used_provider_space" db:"used_provider_space"`
-	TotalProviderSpace      float64   `json:"total_provider_space" db:"total_provider_space"`
-	SwapTotal               float32   `json:"total_swap" db:"total_swap"`
-	SwapUsage               float32   `json:"usage_swap" db:"usage_swap"`
-	SwapUsagePercent        float32   `json:"swap_usage_percent" db:"swap_usage_percent"`
-	RAMUsage                float32   `json:"usage_ram" db:"usage_ram"`
-	RAMTotal                float32   `json:"total_ram" db:"total_ram"`
-	RAMUsagePercent         float32   `json:"ram_usage_percent" db:"ram_usage_percent"`
-	CPUNumber               int32     `json:"cpu_number" db:"cpu_number"`
-	CPUIsVirtual            bool      `json:"cpu_is_virtual" db:"cpu_is_virtual"`
+	PublicKey          string    `json:"public_key" db:"public_key"`
+	StorageGitHash     string    `json:"storage_git_hash" db:"storage_git_hash"`
+	ProviderGitHash    string    `json:"provider_git_hash" db:"provider_git_hash"`
+	CPUName            string    `json:"cpu_name" db:"cpu_name"`
+	Pings              string    `json:"pings" db:"pings"`
+	CPUProductName     string    `json:"cpu_product_name" db:"cpu_product_name"`
+	USysname           string    `json:"uname_sysname" db:"uname_sysname"`
+	URelease           string    `json:"uname_release" db:"uname_release"`
+	UVersion           string    `json:"uname_version" db:"uname_version"`
+	UMachine           string    `json:"uname_machine" db:"uname_machine"`
+	DiskName           string    `json:"disk_name" db:"disk_name"`
+	CPULoad            []float32 `json:"cpu_load" db:"cpu_load"`
+	TotalDiskSpace     float64   `json:"total_space" db:"total_space"`
+	FreeDiskSpace      float64   `json:"free_space" db:"free_space"`
+	UsedDiskSpace      float64   `json:"used_space" db:"used_space"`
+	UsedProviderSpace  float64   `json:"used_provider_space" db:"used_provider_space"`
+	TotalProviderSpace float64   `json:"total_provider_space" db:"total_provider_space"`
+	SwapTotal          float32   `json:"total_swap" db:"total_swap"`
+	SwapUsage          float32   `json:"usage_swap" db:"usage_swap"`
+	SwapUsagePercent   float32   `json:"swap_usage_percent" db:"swap_usage_percent"`
+	RAMUsage           float32   `json:"usage_ram" db:"usage_ram"`
+	RAMTotal           float32   `json:"total_ram" db:"total_ram"`
+	RAMUsagePercent    float32   `json:"ram_usage_percent" db:"ram_usage_percent"`
+	CPUNumber          int32     `json:"cpu_number" db:"cpu_number"`
+	CPUIsVirtual       bool      `json:"cpu_is_virtual" db:"cpu_is_virtual"`
 }
 
 type TelemetryDB struct {
 	StorageGitHash          *string  `json:"storage_git_hash"`
 	ProviderGitHash         *string  `json:"provider_git_hash"`
+	BenchmarkDiskReadSpeed  *string  `json:"qd64_disk_read_speed"`
+	BenchmarkDiskWriteSpeed *string  `json:"qd64_disk_write_speed"`
+	CPUName                 *string  `json:"cpu_name"`
+	Country                 *string  `json:"country"`
+	ISP                     *string  `json:"isp"`
 	TotalProviderSpace      *float32 `json:"total_provider_space"`
 	UsedProviderSpace       *float32 `json:"used_provider_space"`
-	CPUName                 *string  `json:"cpu_name"`
-	CPUNumber               *uint16  `json:"cpu_number"`
-	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`
 	TotalRAM                *float32 `json:"total_ram"`
 	UsageRAM                *float32 `json:"usage_ram"`
 	UsageRAMPercent         *float32 `json:"ram_usage_percent"`
-	BenchmarkDiskReadSpeed  *float32 `json:"benchmark_disk_read_speed"`
-	BenchmarkDiskWriteSpeed *float32 `json:"benchmark_disk_write_speed"`
-	BenchmarkRocksOps       *int32   `json:"benchmark_rocks_ops"`
-	SpeedtestDownloadSpeed  *float32 `json:"speedtest_download_speed"`
-	SpeedtestUploadSpeed    *float32 `json:"speedtest_upload_speed"`
+	SpeedtestDownload       *float32 `json:"speedtest_download"`
+	SpeedtestUpload         *float32 `json:"speedtest_upload"`
 	SpeedtestPing           *float32 `json:"speedtest_ping"`
-	Country                 *string  `json:"country"`
-	ISP                     *string  `json:"isp"`
+	CPUNumber               *uint16  `json:"cpu_number"`
+	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`
 }
 
 type ProviderDB struct {
@@ -137,7 +139,7 @@ type ProviderDB struct {
 	UpTime  float32 `json:"uptime"`
 	Rating  float32 `json:"rating"`
 	MaxSpan uint32  `json:"max_span"`
-	Price   uint32  `json:"price"`
+	Price   uint64  `json:"price"`
 
 	MinSpan         uint32      `json:"min_span"`
 	MaxBagSizeBytes uint64      `json:"max_bag_size_bytes"`

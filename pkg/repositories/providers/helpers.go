@@ -13,7 +13,7 @@ const (
 			p.uptime * 100 as uptime,
 			p.rating,
 			p.max_span,
-			GREATEST(p.rate_per_mb_per_day, p.min_bounty) as price,
+			GREATEST(p.rate_per_mb_per_day * 1024 * 200 * 30) as price,
 			p.min_span,
 			0,                  -- p.max_bag_size_bytes ???
 			p.registered_at,
@@ -28,24 +28,42 @@ const (
 			t.total_ram,
 			t.usage_ram,
 			t.ram_usage_percent,
-			t.benchmark_disk_read_speed,
-			t.benchmark_disk_write_speed,
-			t.benchmark_rocks_ops,
-			t.speedtest_download_speed,
-			t.speedtest_upload_speed,
-			t.speedtest_ping,
-			t.country,
-			t.isp
+			b.qd64_disk_read_speed,
+			b.qd64_disk_write_speed,
+			b.speedtest_download,
+			b.speedtest_upload,
+			b.speedtest_ping,
+			b.country,
+			b.isp
 		FROM providers.providers p
-		    JOIN providers.statuses s ON p.public_key = s.public_key
 			LEFT JOIN providers.telemetry t ON p.public_key = t.public_key
-		WHERE p.is_initialized 
-			AND s.is_online 
-			AND s.check_time >= NOW() - INTERVAL '1 hour'
+			LEFT JOIN providers.benchmarks b ON p.public_key = b.public_key
+		WHERE p.is_initialized AND p.rating is not null AND p.uptime IS NOT NULL
 			%s
+		ORDER BY %s
 		LIMIT $1
 		OFFSET $2`
 )
+
+func sortToCondition(sort db.ProviderSort) (condition string) {
+	if sort.Column == "" {
+		condition = "p.rating "
+	} else {
+		condition = sort.Column + " "
+	}
+
+	if sort.Order == "" {
+		condition += "DESC"
+	} else {
+		if sort.Order == "ASC" {
+			condition += "ASC"
+		} else {
+			condition += "DESC"
+		}
+	}
+
+	return
+}
 
 func filtersToCondition(filters db.ProviderFilters, args []any) (condition string, resArgs []any) {
 	resArgs = args
@@ -167,12 +185,6 @@ func filtersToCondition(filters db.ProviderFilters, args []any) (condition strin
 	}
 	if filters.BenchmarkDiskWriteSpeedLt != nil {
 		condition += fmt.Sprintf(" AND t.benchmark_disk_write_speed <= %f", *filters.BenchmarkDiskWriteSpeedLt)
-	}
-	if filters.BenchmarkRocksOpsGt != nil {
-		condition += fmt.Sprintf(" AND t.benchmark_rocks_ops >= %f", *filters.BenchmarkRocksOpsGt)
-	}
-	if filters.BenchmarkRocksOpsLt != nil {
-		condition += fmt.Sprintf(" AND t.benchmark_rocks_ops <= %f", *filters.BenchmarkRocksOpsLt)
 	}
 	if filters.SpeedtestDownloadSpeedGt != nil {
 		condition += fmt.Sprintf(" AND t.speedtest_download_speed >= %f", *filters.SpeedtestDownloadSpeedGt)

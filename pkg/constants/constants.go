@@ -2,18 +2,18 @@ package constants
 
 // Sorting constants
 const (
-	UptimeColumn      = "uptime"
-	WorkingTimeColumn = "working_time"
-	RatingColumn      = "rating"
-	MaxSpanColumn     = "max_span"
-	PriceColumn       = "price"
+	PubKeyColumn      = "p.public_key"
+	UptimeColumn      = "p.uptime"
+	WorkingTimeColumn = "p.registered_at"
+	RatingColumn      = "p.rating"
+	PriceColumn       = "p.rate_per_mb_per_day"
 )
 
 var SortingMap = map[string]string{
+	"pubkey":      PubKeyColumn,
 	"uptime":      UptimeColumn,
 	"workingtime": WorkingTimeColumn,
 	"rating":      RatingColumn,
-	"maxspan":     MaxSpanColumn,
 	"price":       PriceColumn,
 }
 

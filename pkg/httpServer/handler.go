@@ -13,6 +13,7 @@ type providers interface {
 	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) ([]v1.Provider, error)
 	GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error)
 	UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error)
+	UpdateBenchmarks(ctx context.Context, benchmark *v1.BenchmarksRequest) (err error)
 }
 
 type errorResponse struct {

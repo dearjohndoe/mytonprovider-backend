@@ -165,13 +165,13 @@ func (w *providersMasterWorker) UpdateKnownProviders(ctx context.Context) (inter
 			return
 		default:
 		}
-		prv, err := hex.DecodeString(pubkey)
-		if err != nil || len(prv) != 32 {
+		d, err := hex.DecodeString(pubkey)
+		if err != nil || len(d) != 32 {
 			continue
 		}
 
 		timeoutCtx, cancel := context.WithTimeout(ctx, providerResponseTimeout)
-		rates, err := w.providerClient.GetStorageRates(timeoutCtx, prv, fakeSize)
+		rates, err := w.providerClient.GetStorageRates(timeoutCtx, d, fakeSize)
 		cancel()
 		if err != nil {
 			providersStatuses = append(providersStatuses, db.ProviderStatusUpdate{

@@ -82,6 +82,38 @@ func (h *handler) updateTelemetry(c *fiber.Ctx) (err error) {
 	return c.JSON(okHandler(c))
 }
 
+func (h *handler) updateBenchmarks(c *fiber.Ctx) (err error) {
+	body := c.Body()
+	log := h.logger.With(
+		slog.String("method", "updateBenchmarks"),
+		slog.String("method", c.Method()),
+		slog.String("url", c.OriginalURL()),
+		slog.Any("headers", c.GetReqHeaders()),
+		slog.Int("body_length", len(body)),
+		slog.String("body", string(body)),
+	)
+
+	if len(body) == 0 || body[0] != '{' {
+		err = fiber.NewError(fiber.StatusBadRequest, "invalid gzip body")
+		return errorHandler(c, err)
+	}
+
+	var req v1.BenchmarksRequest
+	err = json.Unmarshal(body, &req)
+	if err != nil {
+		log.Error("failed to parse benchmarks body", slog.String("error", err.Error()))
+		err = fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+		return errorHandler(c, err)
+	}
+
+	err = h.providers.UpdateBenchmarks(c.Context(), &req)
+	if err != nil {
+		return errorHandler(c, err)
+	}
+
+	return c.JSON(okHandler(c))
+}
+
 func (h *handler) getLatestTelemetry(c *fiber.Ctx) (err error) {
 	providers, err := h.providers.GetLatestTelemetry(c.Context())
 	if err != nil {

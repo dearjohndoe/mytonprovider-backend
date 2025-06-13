@@ -23,6 +23,7 @@ type Workers interface {
 
 func (w *worker) Start(ctx context.Context) (err error) {
 	go w.run(ctx, "UpdateTelemetry", w.telemetry.UpdateTelemetry)
+	go w.run(ctx, "UpdateBenchmarks", w.telemetry.UpdateBenchmarks)
 
 	go w.run(ctx, "CollectNewProviders", w.providersMaster.CollectNewProviders)
 	go w.run(ctx, "UpdateKnownProviders", w.providersMaster.UpdateKnownProviders)

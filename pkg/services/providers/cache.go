@@ -10,9 +10,10 @@ import (
 )
 
 type cacheMiddleware struct {
-	svc    Providers
-	buffer *cache.SimpleCache
-	lates  *cache.SimpleCache
+	svc              Providers
+	telemetryBuffer  *cache.SimpleCache
+	benchmarksBuffer *cache.SimpleCache
+	lates            *cache.SimpleCache
 }
 
 func (c *cacheMiddleware) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error) {
@@ -41,17 +42,33 @@ func (c *cacheMiddleware) UpdateTelemetry(ctx context.Context, telemetry *v1.Tel
 		return
 	}
 
-	c.buffer.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
+	c.telemetryBuffer.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
 	c.lates.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
 
 	return
 }
 
-func NewCacheMiddleware(svc Providers, telemetry *cache.SimpleCache) Providers {
+func (c *cacheMiddleware) UpdateBenchmarks(ctx context.Context, benchmark *v1.BenchmarksRequest) (err error) {
+	err = c.svc.UpdateBenchmarks(ctx, benchmark)
+	if err != nil {
+		return
+	}
+
+	c.benchmarksBuffer.Set(strings.ToLower(benchmark.PubKey), benchmark)
+
+	return
+}
+
+func NewCacheMiddleware(
+	svc Providers,
+	telemetry *cache.SimpleCache,
+	benchmarks *cache.SimpleCache,
+) Providers {
 	latest := cache.NewSimpleCache(2 * time.Minute)
 	return &cacheMiddleware{
-		svc:    svc,
-		buffer: telemetry,
-		lates:  latest,
+		svc:              svc,
+		telemetryBuffer:  telemetry,
+		benchmarksBuffer: benchmarks,
+		lates:            latest,
 	}
 }
