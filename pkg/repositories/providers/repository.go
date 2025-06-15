@@ -26,6 +26,11 @@ type Repository interface {
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
+
+	CleanOldProvidersHistory(ctx context.Context, days int) (removed int, err error)
+	CleanOldStatusesHistory(ctx context.Context, days int) (removed int, err error)
+	CleanOldBenchmarksHistory(ctx context.Context, days int) (removed int, err error)
+	CleanOldTelemetryHistory(ctx context.Context, days int) (removed int, err error)
 }
 
 func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string) (resp []db.ProviderDB, err error) {
@@ -429,6 +434,70 @@ func (r *repository) AddProviders(ctx context.Context, providers []db.ProviderCr
 	`
 
 	_, err = r.db.Exec(ctx, query, providers)
+
+	return
+}
+
+func (r *repository) CleanOldProvidersHistory(ctx context.Context, days int) (removed int, err error) {
+	query := `
+		DELETE FROM providers.providers_history
+		WHERE archived_at < NOW() - INTERVAL '1 day' * $1
+	`
+	resp, err := r.db.Exec(ctx, query, days)
+	if err != nil {
+		err = fmt.Errorf("failed to clean old providers history: %w", err)
+		return
+	}
+
+	removed = int(resp.RowsAffected())
+
+	return
+}
+
+func (r *repository) CleanOldStatusesHistory(ctx context.Context, days int) (removed int, err error) {
+	query := `
+		DELETE FROM providers.statuses_history
+		WHERE check_time < NOW() - INTERVAL '1 day' * $1
+	`
+	resp, err := r.db.Exec(ctx, query, days)
+	if err != nil {
+		err = fmt.Errorf("failed to clean old statuses history: %w", err)
+		return
+	}
+
+	removed = int(resp.RowsAffected())
+
+	return
+}
+
+func (r *repository) CleanOldBenchmarksHistory(ctx context.Context, days int) (removed int, err error) {
+	query := `
+		DELETE FROM providers.benchmarks_history
+		WHERE archived_at < NOW() - INTERVAL '1 day' * $1
+	`
+	resp, err := r.db.Exec(ctx, query, days)
+	if err != nil {
+		err = fmt.Errorf("failed to clean old benchmarks history: %w", err)
+		return
+	}
+
+	removed = int(resp.RowsAffected())
+
+	return
+}
+
+func (r *repository) CleanOldTelemetryHistory(ctx context.Context, days int) (removed int, err error) {
+	query := `
+		DELETE FROM providers.telemetry_history
+		WHERE archived_at < NOW() - INTERVAL '1 day' * $1
+	`
+	resp, err := r.db.Exec(ctx, query, days)
+	if err != nil {
+		err = fmt.Errorf("failed to clean old telemetry history: %w", err)
+		return
+	}
+
+	removed = int(resp.RowsAffected())
 
 	return
 }

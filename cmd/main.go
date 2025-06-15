@@ -18,6 +18,7 @@ import (
 	"mytonprovider-backend/pkg/services/providers"
 	"mytonprovider-backend/pkg/tonclient"
 	"mytonprovider-backend/pkg/workers"
+	"mytonprovider-backend/pkg/workers/cleaner"
 	providersmaster "mytonprovider-backend/pkg/workers/providersMaster"
 	"mytonprovider-backend/pkg/workers/telemetry"
 )
@@ -80,9 +81,10 @@ func run() (err error) {
 		config.TON.BatchSize,
 		logger,
 	)
+	cleanerWorker := cleaner.NewWorker(providersRepo, config.System.StoreHistoryDays, logger)
 
 	cancelCtx, cancel := context.WithCancel(context.Background())
-	workers := workers.NewWorkers(telemetryWorker, providersMasterWorker, logger)
+	workers := workers.NewWorkers(telemetryWorker, providersMasterWorker, cleanerWorker, logger)
 	go func() {
 		if wErr := workers.Start(cancelCtx); wErr != nil {
 			logger.Error("failed to start workers", slog.String("error", wErr.Error()))

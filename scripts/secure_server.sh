@@ -5,7 +5,7 @@ if [ "$EUID" -ne 0 ]; then
   echo "Please run as root"
   exit 1
 fi
-# NEWSUDOUSER=JohnDoe PASSWORD=yourpassword ./secure_server.sh
+
 if [ -z "$NEWSUDOUSER" ] || [ -z "$PASSWORD" ]; then
   echo "Usage: NEWSUDOUSER=<username> PASSWORD=<password> $0"
   echo "Example: NEWSUDOUSER=JohnDoe PASSWORD=yourpassword $0"
