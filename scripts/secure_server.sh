@@ -1,6 +1,10 @@
 #!/bin/bash
 
-# Check args
+# Run this script as root!
+# This script sets up a secure server environment by installing necessary packages,
+# configuring security settings, creating a new sudo user, and disabling root login.
+# Usage: NEWSUDOUSER=<username> PASSWORD=<password> ./secure_server.sh
+
 if [ "$EUID" -ne 0 ]; then
   echo "Please run as root"
   exit 1
@@ -8,7 +12,7 @@ fi
 
 if [ -z "$NEWSUDOUSER" ] || [ -z "$PASSWORD" ]; then
   echo "Usage: NEWSUDOUSER=<username> PASSWORD=<password> $0"
-  echo "Example: NEWSUDOUSER=JohnDoe PASSWORD=yourpassword $0"
+  echo "Example: NEWSUDOUSER=johndoe PASSWORD=yournewsecurepassword $0"
   exit 1
 fi
 
@@ -24,6 +28,11 @@ dpkg-reconfigure unattended-upgrades
 echo "Configuring UFW..."
 ufw default deny incoming
 ufw default deny outgoing
+ufw allow out 53/udp
+ufw allow out 53/tcp
+ufw allow out 80/tcp
+ufw allow out 443/tcp
+ufw allow out 123/udp
 ufw allow 80/tcp
 ufw allow 16167/tcp
 ufw allow 5432/tcp
@@ -72,4 +81,5 @@ echo "Disabling root login..."
 sed -i 's/^PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
 sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication no/' /etc/ssh/sshd_config
 echo "AllowUsers $NEWSUDOUSER" | sudo tee -a /etc/ssh/sshd_config > /dev/null
-systemctl restart sshd
+
+systemctl restart ssh || systemctl restart sshd || service ssh restart || service sshd restart

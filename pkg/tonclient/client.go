@@ -3,7 +3,6 @@ package tonclient
 import (
 	"context"
 	"log"
-	"math/big"
 	"time"
 
 	"github.com/xssnick/tonutils-go/address"
@@ -21,7 +20,6 @@ const (
 
 type client struct {
 	clientPool *liteclient.ConnectionPool
-	minAmount  *big.Int
 }
 
 type Client interface {
