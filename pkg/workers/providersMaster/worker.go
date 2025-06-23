@@ -147,7 +147,7 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 	if biggestLT > uint64(lastProcessedLT) {
 		errP := w.system.SetParam(ctx, lastLTKey, strconv.FormatUint(biggestLT, 10))
 		if errP != nil {
-			log.Error("cannot new last processed LT for master wallet", "error", err.Error())
+			log.Error("cannot update last processed LT for master wallet", "error", errP.Error())
 		}
 	}
 
