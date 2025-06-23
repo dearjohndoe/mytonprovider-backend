@@ -16,8 +16,8 @@ type repository struct {
 }
 
 type Repository interface {
-	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) ([]db.ProviderDB, error)
-	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.ProviderDB, error)
+	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) (providers []db.ProviderDB, err error)
+	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) (providers []db.ProviderDB, err error)
 	UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error)
 	UpdateBenchmarks(ctx context.Context, benchmarks []db.BenchmarkUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
@@ -220,7 +220,7 @@ func (r *repository) UpdateBenchmarks(ctx context.Context, benchmarks []db.Bench
 
 	query := `
 		INSERT INTO providers.benchmarks (
-			public_key,
+			lower(public_key),
 			disk,
 			network,
 			qd64_disk_read_speed,
@@ -332,20 +332,20 @@ func (r *repository) UpdateRating(ctx context.Context) (err error) {
 		UPDATE providers.providers p
 		SET rating = (
 			(
-				0.01 * (EXTRACT(EPOCH FROM pr.registered_at) * COALESCE(pr.uptime, 0)) +
+				0.0001 * (EXTRACT(EPOCH FROM pr.registered_at) * COALESCE(pr.uptime, 0)) +
 				0.00002 * (COALESCE(pr.max_span, 0) - COALESCE(pr.min_span, 0)) +
 				0.00000000008 * COALESCE(pr.max_bag_size_bytes, 0) +
 				0.000000004 * COALESCE(pr.total_provider_space, 0) +
-				1.9 * COALESCE(pr.cpu_number, 0) +
+				1.9 * LEAST(COALESCE(pr.cpu_number, 0), 128) +
 				0.0000006 * COALESCE(pr.total_ram, 0) +
 				0.00008 * COALESCE(pr.benchmark_disk_write_speed, 0) +
 				0.00008 * COALESCE(pr.benchmark_disk_read_speed, 0) +
 				0.00001 * COALESCE(pr.speedtest_download_speed, 0) +
 				0.00004 * COALESCE(pr.speedtest_upload_speed, 0) +
-				CASE WHEN COALESCE(pr.speedtest_ping, 0) > 0 THEN 400 / pr.speedtest_ping ELSE 0 END
+				CASE WHEN COALESCE(pr.speedtest_ping, 0) > 0 THEN 400 / pr.speedtest_ping ELSE 1 END
 			)
-			/ NULLIF(COALESCE(pr.rate_per_mb_per_day, 1), 0)
-		) / 2000.0
+			/ GREATEST(LOG(COALESCE(NULLIF(pr.rate_per_mb_per_day, 0), 1)), 1)
+		) / 3000.0
 		FROM params pr
 		WHERE p.public_key = pr.public_key
     `
@@ -379,7 +379,8 @@ func (r *repository) GetAllProvidersPubkeys(ctx context.Context) (pubkeys []stri
 		pubkeys = append(pubkeys, pubkey)
 	}
 
-	if rErr := rows.Err(); rErr != nil {
+	err = rows.Err()
+	if err != nil {
 		return
 	}
 
@@ -540,10 +541,7 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 		providers = append(providers, provider)
 	}
 
-	if rErr := rows.Err(); rErr != nil {
-		err = rErr
-		return
-	}
+	err = rows.Err()
 
 	return
 }

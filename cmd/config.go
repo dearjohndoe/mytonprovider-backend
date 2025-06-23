@@ -24,6 +24,13 @@ type System struct {
 	StoreHistoryDays int                `env:"SYSTEM_STORE_HISTORY_DAYS" envDefault:"90"`
 }
 
+type Metrics struct {
+	Namespace        string `env:"NAMESPACE" default:"ton-storage"`
+	ServerSubsystem  string `env:"SERVER_SUBSYSTEM" default:"mtpo-server"`
+	WorkersSubsystem string `env:"WORKERS_SUBSYSTEM" default:"mtpo-workers"`
+	DbSubsystem      string `env:"DB_SUBSYSTEM" default:"mtpo-db"`
+}
+
 type TON struct {
 	MasterAddress string `env:"MASTER_ADDRESS" required:"true" envDefault:"UQB3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d3d0x0"`
 	ConfigURL     string `env:"TON_CONFIG_URL" required:"true" envDefault:"https://ton-blockchain.github.io/global.config.json"`
@@ -47,6 +54,7 @@ type TONStorage struct {
 
 type Config struct {
 	System     System
+	Metrics    Metrics
 	TON        TON
 	DB         Postgress
 	TONStorage TONStorage
@@ -56,6 +64,9 @@ func loadConfig() *Config {
 	cfg := &Config{}
 	if err := env.Parse(&cfg.System); err != nil {
 		log.Fatalf("Failed to parse system config: %v", err)
+	}
+	if err := env.Parse(&cfg.Metrics); err != nil {
+		log.Fatalf("Failed to parse metrics config: %v", err)
 	}
 	if err := env.Parse(&cfg.DB); err != nil {
 		log.Fatalf("Failed to parse db config: %v", err)

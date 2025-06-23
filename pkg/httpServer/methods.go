@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"log/slog"
 
+	"github.com/gofiber/adaptor/v2"
 	"github.com/gofiber/fiber/v2"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	v1 "mytonprovider-backend/pkg/models/api/v1"
 )
@@ -127,4 +129,10 @@ func (h *handler) getLatestTelemetry(c *fiber.Ctx) (err error) {
 
 func (h *handler) health(c *fiber.Ctx) error {
 	return c.JSON(okHandler(c))
+}
+
+func (h *handler) metrics(c *fiber.Ctx) error {
+	m := promhttp.Handler()
+
+	return adaptor.HTTPHandler(m)(c)
 }

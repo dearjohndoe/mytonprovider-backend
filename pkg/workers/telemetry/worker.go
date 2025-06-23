@@ -166,6 +166,12 @@ func (w *telemetryWorker) UpdateBenchmarks(ctx context.Context) (interval time.D
 			network = string(ns)
 		}
 
+		country := benchmarkItem.Network.Client.Country
+		if len(country) > 2 {
+			logger.Info("Invalid country format", "coutry", country)
+			country = ""
+		}
+
 		items = append(items, db.BenchmarkUpdate{
 			PublicKey:          benchmarkItem.PubKey,
 			Disk:               disk,
@@ -176,7 +182,7 @@ func (w *telemetryWorker) UpdateBenchmarks(ctx context.Context) (interval time.D
 			SpeedtestUpload:    benchmarkItem.Network.Upload,
 			SpeedtestPing:      benchmarkItem.Network.Ping,
 			BenchmarkTimestamp: timestamp.Format(time.RFC3339),
-			Country:            benchmarkItem.Network.Client.Country,
+			Country:            country,
 			ISP:                benchmarkItem.Network.Client.ISP,
 		})
 	}

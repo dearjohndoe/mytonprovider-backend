@@ -2,20 +2,21 @@ package tonclient
 
 import (
 	"context"
-	"log"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
-
-	"mytonprovider-backend/pkg/models"
 )
 
 const (
-	tspPrefix = "tsp-"
-	retries   = 20
+	tspPrefix          = "tsp-"
+	retries            = 20
+	batch              = 30
+	singleQueryTimeout = 5 * time.Second
 )
 
 type client struct {
@@ -23,76 +24,91 @@ type client struct {
 }
 
 type Client interface {
-	GetTransactions(ctx context.Context, addr string, count uint32) (tx []*Transaction, err error)
+	GetTransactions(ctx context.Context, addr string, lastProcessedLT uint64) (tx []*Transaction, err error)
 }
 
-func (c *client) GetTransactions(ctx context.Context, addr string, count uint32) (txs []*Transaction, err error) {
-	api := ton.NewAPIClient(c.clientPool).WithRetry(retries)
+// GetTransactions return all transactions between lastProcessedLT transaction and actual last transaction (both included)
+// Not ordered by LT or other fileds.
+func (c *client) GetTransactions(ctx context.Context, addr string, lastProcessedLT uint64) (txs []*Transaction, err error) {
+	api := ton.NewAPIClient(c.clientPool).WithTimeout(singleQueryTimeout).WithRetry(retries)
 	a, _ := address.ParseAddr(addr)
-	b, err := api.GetMasterchainInfo(ctx)
+	block, err := api.GetMasterchainInfo(ctx)
 	if err != nil {
-		log.Printf("get masterchain info err: %s", err.Error())
-		err = &models.AppError{
-			Code:    models.InternalServerErrorCode,
-			Message: "network error",
-		}
+		err = fmt.Errorf("get masterchain info err: %w", err)
 		return
 	}
 
-	account, err := api.GetAccount(ctx, b, a)
+	account, err := api.GetAccount(ctx, block, a)
 	if err != nil {
-		log.Printf("get account err: %s", err.Error())
-		err = &models.AppError{
-			Code:    models.InternalServerErrorCode,
-			Message: "network error",
-		}
-
+		err = fmt.Errorf("get account err: %w", err)
 		return
 	}
 
-	list, err := api.ListTransactions(ctx, account.State.Address, count, account.LastTxLT, account.LastTxHash)
-	if err != nil {
-		log.Printf("list transactions err: %s", err.Error())
-		err = &models.AppError{
-			Code:    models.InternalServerErrorCode,
-			Message: "network error",
+	lastLT, lastHash := account.LastTxLT, account.LastTxHash
+	var transactions []*tlb.Transaction
+list:
+	for {
+		res, errTx := api.ListTransactions(ctx, a, batch, lastLT, lastHash)
+		if errTx != nil {
+			if errors.Is(errTx, ton.ErrNoTransactionsWereFound) && (len(transactions) > 0) {
+				break
+			}
+
+			err = fmt.Errorf("list transactions: %w", errTx)
+			return
 		}
 
+		if len(res) == 0 {
+			break
+		}
+
+		for i := range res {
+			reverseIter := len(res) - 1 - i
+			tx := res[reverseIter]
+			if tx.LT <= lastProcessedLT {
+				transactions = append(transactions, res[reverseIter:]...)
+				break list
+			}
+		}
+
+		lastLT, lastHash = res[0].PrevTxLT, res[0].PrevTxHash
+		transactions = append(transactions, res...)
+	}
+
+	txs = make([]*Transaction, 0, len(transactions))
+	for _, t := range transactions {
+		if tx, ok := parseTx(t); ok {
+			txs = append(txs, tx)
+		}
+	}
+
+	return
+}
+
+func parseTx(tx *tlb.Transaction) (res *Transaction, ok bool) {
+	in := tx.IO.In
+	if in.MsgType != tlb.MsgTypeInternal {
 		return
 	}
 
-	txs = make([]*Transaction, 0, len(list))
-	for _, t := range list {
-		in := t.IO.In
-		if in.MsgType != tlb.MsgTypeInternal {
-			continue
-		}
+	msg, ok := in.Msg.(*tlb.InternalMessage)
+	if !ok {
+		return
+	}
 
-		msg, ok := in.Msg.(*tlb.InternalMessage)
-		if !ok {
-			continue
-		}
-
-		if msg.Body == nil {
-			continue
-		}
-
+	var comment string
+	if msg.Body != nil {
 		b := msg.Body.BeginParse()
-		comment, err := b.LoadStringSnake()
-		if err != nil {
-			continue
-		}
+		comment, _ = b.LoadStringSnake()
+	}
 
-		if len(comment) == 0 {
-			continue
-		}
-
-		txs = append(txs, &Transaction{
-			Hash:         t.Hash,
-			From:         msg.SrcAddr.String(),
-			Message:      comment,
-			RegisteredAt: time.Unix(int64(msg.CreatedAt), 0),
-		})
+	ok = true
+	res = &Transaction{
+		Hash:      tx.Hash,
+		LT:        tx.LT,
+		From:      msg.SrcAddr.String(),
+		Message:   comment,
+		CreatedAt: time.Unix(int64(msg.CreatedAt), 0),
 	}
 
 	return

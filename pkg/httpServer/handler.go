@@ -24,6 +24,8 @@ type handler struct {
 	server       *fiber.App
 	logger       *slog.Logger
 	providers    providers
+	namespace    string
+	subsystem    string
 	accessTokens map[string]struct{}
 }
 
@@ -31,6 +33,8 @@ func New(
 	server *fiber.App,
 	providers providers,
 	accessTokens []string,
+	namespace string,
+	subsystem string,
 	logger *slog.Logger,
 ) *handler {
 	accessTokensMap := make(map[string]struct{})
@@ -41,6 +45,8 @@ func New(
 	h := &handler{
 		server:       server,
 		providers:    providers,
+		namespace:    namespace,
+		subsystem:    subsystem,
 		accessTokens: accessTokensMap,
 		logger:       logger,
 	}
