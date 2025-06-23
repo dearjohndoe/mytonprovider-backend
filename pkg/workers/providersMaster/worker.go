@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"log/slog"
 	"math/big"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 )
 
 const (
+	lastLTKey               = "masterWalletLastLT"
 	prefix                  = "tsp-"
 	fakeSize                = 1
 	providerResponseTimeout = 5 * time.Second
@@ -29,12 +31,18 @@ type providers interface {
 	UpdateRating(ctx context.Context) (err error)
 }
 
+type system interface {
+	SetParam(ctx context.Context, key string, value string) (err error)
+	GetParam(ctx context.Context, key string) (value string, err error)
+}
+
 type ton interface {
-	GetTransactions(ctx context.Context, addr string, count uint32) (tx []*tonclient.Transaction, err error)
+	GetTransactions(ctx context.Context, addr string, lastProcessedLT uint64) (tx []*tonclient.Transaction, err error)
 }
 
 type providersMasterWorker struct {
 	providers      providers
+	system         system
 	ton            ton
 	providerClient *transport.Client
 	masterAddr     string
@@ -60,6 +68,15 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 
 	interval = successInterval
 
+	lv, err := w.system.GetParam(ctx, lastLTKey)
+	if err != nil {
+		interval = failureInterval
+		return
+	}
+
+	// ignore error. Zero will scann all transactions that lite server return, so we ok
+	lastProcessedLT, _ := strconv.ParseInt(lv, 10, 64)
+
 	p, err := w.providers.GetAllProvidersPubkeys(ctx)
 	if err != nil {
 		interval = failureInterval
@@ -74,14 +91,23 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 	timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	txs, err := w.ton.GetTransactions(timeoutCtx, w.masterAddr, w.batchSize)
+	txs, err := w.ton.GetTransactions(timeoutCtx, w.masterAddr, uint64(lastProcessedLT))
 	if err != nil {
 		interval = failureInterval
 		return
 	}
 
 	uniqueProviders := make(map[string]db.ProviderCreate)
+	biggestLT := uint64(lastProcessedLT)
 	for i := range txs {
+		if txs[i].LT <= uint64(lastProcessedLT) {
+			continue
+		}
+
+		if biggestLT < txs[i].LT {
+			biggestLT = txs[i].LT
+		}
+
 		pos := strings.Index(txs[i].Message, prefix)
 		if pos < 0 {
 			continue
@@ -102,7 +128,6 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 			continue
 		}
 
-		// todo: store as bytearray
 		prv, err := hex.DecodeString(pubkey)
 		if err != nil || len(prv) != 32 {
 			continue
@@ -111,12 +136,19 @@ func (w *providersMasterWorker) CollectNewProviders(ctx context.Context) (interv
 		uniqueProviders[pubkey] = db.ProviderCreate{
 			Pubkey:       pubkey,
 			Address:      txs[i].From,
-			RegisteredAt: txs[i].RegisteredAt,
+			RegisteredAt: txs[i].CreatedAt,
 		}
 	}
 
 	if len(uniqueProviders) == 0 {
 		return
+	}
+
+	if biggestLT > uint64(lastProcessedLT) {
+		errP := w.system.SetParam(ctx, lastLTKey, strconv.FormatUint(biggestLT, 10))
+		if errP != nil {
+			log.Error("cannot new last processed LT for master wallet", "error", err.Error())
+		}
 	}
 
 	providersInit := make([]db.ProviderCreate, 0, len(uniqueProviders))
@@ -214,8 +246,8 @@ func (w *providersMasterWorker) UpdateKnownProviders(ctx context.Context) (inter
 
 func (w *providersMasterWorker) UpdateUptime(ctx context.Context) (interval time.Duration, err error) {
 	const (
+		successInterval = 5 * time.Minute
 		failureInterval = 5 * time.Second
-		successInterval = 30 * time.Minute
 	)
 
 	log := w.logger.With(slog.String("worker", "UpdateUptime"))
@@ -234,8 +266,8 @@ func (w *providersMasterWorker) UpdateUptime(ctx context.Context) (interval time
 
 func (w *providersMasterWorker) UpdateRating(ctx context.Context) (interval time.Duration, err error) {
 	const (
+		successInterval = 5 * time.Minute
 		failureInterval = 5 * time.Second
-		successInterval = 30 * time.Minute
 	)
 
 	log := w.logger.With(slog.String("worker", "UpdateRating"))
@@ -254,6 +286,7 @@ func (w *providersMasterWorker) UpdateRating(ctx context.Context) (interval time
 
 func NewWorker(
 	providers providers,
+	system system,
 	ton ton,
 	providerClient *transport.Client,
 	masterAddr string,
@@ -262,6 +295,7 @@ func NewWorker(
 ) Worker {
 	return &providersMasterWorker{
 		providers:      providers,
+		system:         system,
 		ton:            ton,
 		providerClient: providerClient,
 		masterAddr:     masterAddr,

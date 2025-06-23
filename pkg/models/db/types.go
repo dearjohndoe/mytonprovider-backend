@@ -147,3 +147,9 @@ type ProviderDB struct {
 	IsSendTelemetry bool        `json:"is_send_telemetry"`
 	Telemetry       TelemetryDB `json:"telemetry"`
 }
+
+type ProviderWallet struct {
+	PubKey  string `db:"public_key"`
+	Address string `db:"address"`
+	LT      uint64 `db:"lt"`
+}
