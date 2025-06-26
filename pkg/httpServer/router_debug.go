@@ -47,7 +47,7 @@ func (h *handler) RegisterRoutes() {
 
 	h.server.Get("/health", h.health)
 
-	h.server.Get("/metrics", h.metrics)
+	h.server.Get("/metrics", h.authorizationMiddleware, h.metrics)
 
 	apiv1 := h.server.Group("/api/v1", h.loggerMiddleware)
 	{

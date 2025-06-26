@@ -3,6 +3,7 @@ package httpServer
 import (
 	"crypto/md5"
 	"fmt"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
@@ -11,6 +12,10 @@ func (h *handler) authorizationMiddleware(c *fiber.Ctx) error {
 	accessToken := c.Get("Authorization")
 	if accessToken == "" {
 		return errorHandler(c, fiber.NewError(fiber.StatusUnauthorized, "unauthorized"))
+	}
+
+	if strings.HasPrefix(strings.ToLower(accessToken), "bearer ") {
+		accessToken = accessToken[7:]
 	}
 
 	hash := md5.Sum([]byte(accessToken))
