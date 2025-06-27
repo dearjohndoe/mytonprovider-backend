@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
 
 	"mytonprovider-backend/pkg/constants"
@@ -110,6 +111,11 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 	for _, provider := range providersDB {
 		workingTime := uint64(time.Now().Unix()) - provider.RegTime
 
+		var updatedAt uint64
+		if provider.Telemetry.UpdatedAt != nil {
+			updatedAt = *provider.Telemetry.UpdatedAt
+		}
+
 		providers = append(providers, v1.Provider{
 			PubKey:          provider.PubKey,
 			UpTime:          provider.UpTime,
@@ -122,6 +128,7 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			RegTime:         provider.RegTime,
 			IsSendTelemetry: provider.IsSendTelemetry,
 			Telemetry: v1.Telemetry{
+				UpdatedAt:               &updatedAt,
 				StorageGitHash:          provider.Telemetry.StorageGitHash,
 				ProviderGitHash:         provider.Telemetry.ProviderGitHash,
 				TotalProviderSpace:      provider.Telemetry.TotalProviderSpace,
@@ -194,11 +201,11 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 	}
 
 	sortColumn := constants.RatingColumn
-	if v, ok := constants.SortingMap[req.Sort.Column]; ok {
+	if v, ok := constants.SortingMap[strings.ToLower(req.Sort.Column)]; ok {
 		sortColumn = v
 	}
 	order := constants.Asc
-	if v, ok := constants.OrderMap[req.Sort.Order]; ok {
+	if v, ok := constants.OrderMap[strings.ToLower(req.Sort.Order)]; ok {
 		order = v
 	}
 	sort := db.ProviderSort{

@@ -2,6 +2,9 @@ package providers
 
 import (
 	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"mytonprovider-backend/pkg/models/db"
 )
@@ -15,7 +18,7 @@ const (
 			p.max_span,
 			GREATEST(p.rate_per_mb_per_day * 1024 * 200 * 30) as price,
 			p.min_span,
-			0,                  -- p.max_bag_size_bytes ???
+			p.max_bag_size_bytes,
 			p.registered_at,
 			coalesce(p.is_send_telemetry, false) as is_send_telemetry,
 			t.storage_git_hash,
@@ -28,6 +31,7 @@ const (
 			t.total_ram,
 			t.usage_ram,
 			t.ram_usage_percent,
+			t.updated_at,
 			b.qd64_disk_read_speed,
 			b.qd64_disk_write_speed,
 			b.speedtest_download,
@@ -112,12 +116,12 @@ func filtersToCondition(filters db.ProviderFilters, args []any) (condition strin
 	if filters.MaxSpanLt != nil {
 		condition += fmt.Sprintf(" AND p.max_span <= %d", *filters.MaxSpanLt)
 	}
-	// if filters.MaxBagSizeBytesGt != nil {
-	// 	condition += fmt.Sprintf(" AND p.max_bag_size_bytes >= %d", *filters.MaxBagSizeBytesGt)
-	// }
-	// if filters.MaxBagSizeBytesLt != nil {
-	// 	condition += fmt.Sprintf(" AND p.max_bag_size_bytes <= %d", *filters.MaxBagSizeBytesLt)
-	// }
+	if filters.MaxBagSizeBytesGt != nil {
+		condition += fmt.Sprintf(" AND p.max_bag_size_bytes >= %d", *filters.MaxBagSizeBytesGt)
+	}
+	if filters.MaxBagSizeBytesLt != nil {
+		condition += fmt.Sprintf(" AND p.max_bag_size_bytes <= %d", *filters.MaxBagSizeBytesLt)
+	}
 	if filters.IsSendTelemetry != nil {
 		if *filters.IsSendTelemetry {
 			condition += " AND p.is_send_telemetry"
@@ -175,43 +179,93 @@ func filtersToCondition(filters db.ProviderFilters, args []any) (condition strin
 		condition += fmt.Sprintf(" AND t.ram_usage_percent <= %f", *filters.UsageRamPercentLt)
 	}
 	if filters.BenchmarkDiskReadSpeedGt != nil {
-		condition += fmt.Sprintf(" AND t.benchmark_disk_read_speed >= %f", *filters.BenchmarkDiskReadSpeedGt)
+		condition += fmt.Sprintf(" AND b.qd64_disk_read_speed >= %f", *filters.BenchmarkDiskReadSpeedGt)
 	}
 	if filters.BenchmarkDiskReadSpeedLt != nil {
-		condition += fmt.Sprintf(" AND t.benchmark_disk_read_speed <= %f", *filters.BenchmarkDiskReadSpeedLt)
+		condition += fmt.Sprintf(" AND b.qd64_disk_read_speed <= %f", *filters.BenchmarkDiskReadSpeedLt)
 	}
 	if filters.BenchmarkDiskWriteSpeedGt != nil {
-		condition += fmt.Sprintf(" AND t.benchmark_disk_write_speed >= %f", *filters.BenchmarkDiskWriteSpeedGt)
+		condition += fmt.Sprintf(" AND b.qd64_disk_write_speed >= %f", *filters.BenchmarkDiskWriteSpeedGt)
 	}
 	if filters.BenchmarkDiskWriteSpeedLt != nil {
-		condition += fmt.Sprintf(" AND t.benchmark_disk_write_speed <= %f", *filters.BenchmarkDiskWriteSpeedLt)
+		condition += fmt.Sprintf(" AND b.qd64_disk_write_speed <= %f", *filters.BenchmarkDiskWriteSpeedLt)
 	}
 	if filters.SpeedtestDownloadSpeedGt != nil {
-		condition += fmt.Sprintf(" AND t.speedtest_download_speed >= %f", *filters.SpeedtestDownloadSpeedGt)
+		condition += fmt.Sprintf(" AND b.speedtest_download >= %f", *filters.SpeedtestDownloadSpeedGt)
 	}
 	if filters.SpeedtestDownloadSpeedLt != nil {
-		condition += fmt.Sprintf(" AND t.speedtest_download_speed <= %f", *filters.SpeedtestDownloadSpeedLt)
+		condition += fmt.Sprintf(" AND b.speedtest_download <= %f", *filters.SpeedtestDownloadSpeedLt)
 	}
 	if filters.SpeedtestUploadSpeedGt != nil {
-		condition += fmt.Sprintf(" AND t.speedtest_upload_speed >= %f", *filters.SpeedtestUploadSpeedGt)
+		condition += fmt.Sprintf(" AND b.speedtest_upload >= %f", *filters.SpeedtestUploadSpeedGt)
 	}
 	if filters.SpeedtestUploadSpeedLt != nil {
-		condition += fmt.Sprintf(" AND t.speedtest_upload_speed <= %f", *filters.SpeedtestUploadSpeedLt)
+		condition += fmt.Sprintf(" AND b.speedtest_upload <= %f", *filters.SpeedtestUploadSpeedLt)
 	}
 	if filters.SpeedtestPingGt != nil {
-		condition += fmt.Sprintf(" AND t.speedtest_ping >= %f", *filters.SpeedtestPingGt)
+		condition += fmt.Sprintf(" AND b.speedtest_ping >= %f", *filters.SpeedtestPingGt)
 	}
 	if filters.SpeedtestPingLt != nil {
-		condition += fmt.Sprintf(" AND t.speedtest_ping <= %f", *filters.SpeedtestPingLt)
+		condition += fmt.Sprintf(" AND b.speedtest_ping <= %f", *filters.SpeedtestPingLt)
 	}
 	if filters.Country != nil && len(*filters.Country) >= 0 {
 		resArgs = append(resArgs, "%"+*filters.Country+"%")
-		condition += fmt.Sprintf(" AND t.country ILIKE $%d", len(resArgs))
+		condition += fmt.Sprintf(" AND b.country ILIKE $%d", len(resArgs))
 	}
 	if filters.ISP != nil && len(*filters.ISP) >= 0 {
 		resArgs = append(resArgs, "%"+*filters.ISP+"%")
-		condition += fmt.Sprintf(" AND t.isp ILIKE $%d", len(resArgs))
+		condition += fmt.Sprintf(" AND b.isp ILIKE $%d", len(resArgs))
 	}
+
+	return
+}
+
+func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
+	for rows.Next() {
+		var regTime time.Time
+		var updatedAt *time.Time
+		var provider db.ProviderDB
+		if err := rows.Scan(
+			&provider.PubKey,
+			&provider.UpTime,
+			&provider.Rating,
+			&provider.MaxSpan,
+			&provider.Price,
+			&provider.MinSpan,
+			&provider.MaxBagSizeBytes,
+			&regTime,
+			&provider.IsSendTelemetry,
+			&provider.Telemetry.StorageGitHash,
+			&provider.Telemetry.ProviderGitHash,
+			&provider.Telemetry.TotalProviderSpace,
+			&provider.Telemetry.UsedProviderSpace,
+			&provider.Telemetry.CPUName,
+			&provider.Telemetry.CPUNumber,
+			&provider.Telemetry.CPUIsVirtual,
+			&provider.Telemetry.TotalRAM,
+			&provider.Telemetry.UsageRAM,
+			&provider.Telemetry.UsageRAMPercent,
+			&updatedAt,
+			&provider.Telemetry.BenchmarkDiskReadSpeed,
+			&provider.Telemetry.BenchmarkDiskWriteSpeed,
+			&provider.Telemetry.SpeedtestDownload,
+			&provider.Telemetry.SpeedtestUpload,
+			&provider.Telemetry.SpeedtestPing,
+			&provider.Telemetry.Country,
+			&provider.Telemetry.ISP); err != nil {
+			return nil, err
+		}
+
+		if updatedAt != nil {
+			u := uint64(updatedAt.Unix())
+			provider.Telemetry.UpdatedAt = &u
+		}
+
+		provider.RegTime = uint64(regTime.Unix())
+		providers = append(providers, provider)
+	}
+
+	err = rows.Err()
 
 	return
 }

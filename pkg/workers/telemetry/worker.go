@@ -101,6 +101,7 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 			CPUName:            telemetryItem.CPUInfo.CPUName,
 			CPUProductName:     telemetryItem.CPUInfo.ProductName,
 			CPUIsVirtual:       telemetryItem.CPUInfo.IsVirtual,
+			MaxBagSizeBytes:    telemetryItem.Storage.Provider.MaxBagSizeBytes,
 			Pings:              pings,
 		})
 	}

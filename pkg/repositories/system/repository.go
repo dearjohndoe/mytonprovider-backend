@@ -23,8 +23,8 @@ func (r *repository) SetParam(ctx context.Context, key string, value string) (er
 			$1,
 			$2
 		)
-		ON CONFLICT DO UPDATE
-			value = EXCLUDED.value,
+		ON CONFLICT (key) DO UPDATE
+		SET value = EXCLUDED.value,
 			updated_at = now();
 	`
 
@@ -52,10 +52,11 @@ func (r *repository) GetParam(ctx context.Context, key string) (value string, er
 	}
 	defer rows.Close()
 
-	rows.Next()
-	if rErr := rows.Scan(&value); rErr != nil {
-		err = rErr
-		return
+	if rows.Next() {
+		if rErr := rows.Scan(&value); rErr != nil {
+			err = rErr
+			return
+		}
 	}
 
 	err = rows.Err()

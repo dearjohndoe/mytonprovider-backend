@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -42,7 +41,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			p.max_span,
 			GREATEST(p.rate_per_mb_per_day * 1024 * 200 * 30) as price,
 			p.min_span,
-			0,                  -- p.max_bag_size_bytes ???
+			p.max_bag_size_bytes,
 			p.registered_at,
 			coalesce(p.is_send_telemetry, false) as is_send_telemetry,
 			t.storage_git_hash,
@@ -55,6 +54,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			t.total_ram,
 			t.usage_ram,
 			t.ram_usage_percent,
+			t.updated_at,
 			b.qd64_disk_read_speed,
 			b.qd64_disk_write_speed,
 			b.speedtest_download,
@@ -120,10 +120,17 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 
 	query := `
 		WITH upd_providers AS (
-			UPDATE providers.providers
+			UPDATE providers.providers p
 			SET
-				is_send_telemetry = true
-			WHERE public_key = ANY(SELECT t->>'public_key' FROM jsonb_array_elements($1::jsonb) t)
+				is_send_telemetry = true,
+				max_bag_size_bytes = t.max_bag_size_bytes
+			FROM (
+				SELECT 
+					t->>'public_key' as public_key, 
+					(t->>'max_bag_size_bytes')::bigint as max_bag_size_bytes
+				FROM jsonb_array_elements($1::jsonb) t
+			) as t
+			WHERE p.public_key = t.public_key
 		)
 		INSERT INTO providers.telemetry (
 			public_key,
@@ -139,8 +146,8 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			disk_name,
 			cpu_load,
 			total_space,
-			free_space,
 			used_space,
+			free_space,
 			used_provider_space,
 			total_provider_space,
 			total_swap,
@@ -205,7 +212,8 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			total_ram = EXCLUDED.total_ram,
 			ram_usage_percent = EXCLUDED.ram_usage_percent,
 			cpu_number = EXCLUDED.cpu_number,
-			cpu_is_virtual = EXCLUDED.cpu_is_virtual
+			cpu_is_virtual = EXCLUDED.cpu_is_virtual,
+			updated_at = now()
 	`
 
 	_, err = r.db.Exec(ctx, query, telemetry)
@@ -320,13 +328,14 @@ func (r *repository) UpdateRating(ctx context.Context) (err error) {
 				t.total_provider_space,
 				t.cpu_number,
 				t.total_ram,
-				t.benchmark_disk_write_speed,
-				t.benchmark_disk_read_speed,
-				t.speedtest_download_speed,
-				t.speedtest_upload_speed,
-				t.speedtest_ping
+				b.qd64_disk_write_speed,
+				b.qd64_disk_read_speed,
+				b.speedtest_download,
+				b.speedtest_upload,
+				b.speedtest_ping
 			FROM providers.providers p
 				LEFT JOIN providers.telemetry t ON p.public_key = t.public_key
+				LEFT JOIN providers.benchmarks b ON p.public_key = b.public_key
 			WHERE p.is_initialized
 		)
 		UPDATE providers.providers p
@@ -338,14 +347,14 @@ func (r *repository) UpdateRating(ctx context.Context) (err error) {
 				0.000000004 * COALESCE(pr.total_provider_space, 0) +
 				1.9 * LEAST(COALESCE(pr.cpu_number, 0), 128) +
 				0.0000006 * COALESCE(pr.total_ram, 0) +
-				0.00008 * COALESCE(pr.benchmark_disk_write_speed, 0) +
-				0.00008 * COALESCE(pr.benchmark_disk_read_speed, 0) +
-				0.00001 * COALESCE(pr.speedtest_download_speed, 0) +
-				0.00004 * COALESCE(pr.speedtest_upload_speed, 0) +
+				0.00008 * COALESCE(providers.parse_speed_to_int(pr.qd64_disk_write_speed), 0) +
+				0.00008 * COALESCE(providers.parse_speed_to_int(pr.qd64_disk_read_speed), 0) +
+				0.00001 * COALESCE(pr.speedtest_download, 0) +
+				0.00004 * COALESCE(pr.speedtest_upload, 0) +
 				CASE WHEN COALESCE(pr.speedtest_ping, 0) > 0 THEN 400 / pr.speedtest_ping ELSE 1 END
 			)
-			/ GREATEST(LOG(COALESCE(NULLIF(pr.rate_per_mb_per_day, 0), 1)), 1)
-		) / 3000.0
+			/ GREATEST(LOG(COALESCE(NULLIF(pr.rate_per_mb_per_day / 100, 0), 1)), 1)
+		) / 10000.0
 		FROM params pr
 		WHERE p.public_key = pr.public_key
     `
@@ -499,49 +508,6 @@ func (r *repository) CleanOldTelemetryHistory(ctx context.Context, days int) (re
 	}
 
 	removed = int(resp.RowsAffected())
-
-	return
-}
-
-func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
-	for rows.Next() {
-		var regTime time.Time
-		var provider db.ProviderDB
-		if err := rows.Scan(
-			&provider.PubKey,
-			&provider.UpTime,
-			&provider.Rating,
-			&provider.MaxSpan,
-			&provider.Price,
-			&provider.MinSpan,
-			&provider.MaxBagSizeBytes, // TODO: where to get this value?
-			&regTime,
-			&provider.IsSendTelemetry,
-			&provider.Telemetry.StorageGitHash,
-			&provider.Telemetry.ProviderGitHash,
-			&provider.Telemetry.TotalProviderSpace,
-			&provider.Telemetry.UsedProviderSpace,
-			&provider.Telemetry.CPUName,
-			&provider.Telemetry.CPUNumber,
-			&provider.Telemetry.CPUIsVirtual,
-			&provider.Telemetry.TotalRAM,
-			&provider.Telemetry.UsageRAM,
-			&provider.Telemetry.UsageRAMPercent,
-			&provider.Telemetry.BenchmarkDiskReadSpeed,
-			&provider.Telemetry.BenchmarkDiskWriteSpeed,
-			&provider.Telemetry.SpeedtestDownload,
-			&provider.Telemetry.SpeedtestUpload,
-			&provider.Telemetry.SpeedtestPing,
-			&provider.Telemetry.Country,
-			&provider.Telemetry.ISP); err != nil {
-			return nil, err
-		}
-
-		provider.RegTime = uint64(regTime.Unix())
-		providers = append(providers, provider)
-	}
-
-	err = rows.Err()
 
 	return
 }

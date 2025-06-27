@@ -51,10 +51,10 @@ type Filters struct {
 	BenchmarkDiskReadSpeedLt  *float64 `json:"benchmark_disk_read_speed_lt,omitempty"`
 	BenchmarkDiskWriteSpeedGt *float64 `json:"benchmark_disk_write_speed_gt,omitempty"`
 	BenchmarkDiskWriteSpeedLt *float64 `json:"benchmark_disk_write_speed_lt,omitempty"`
-	SpeedtestDownloadSpeedGt  *float64 `json:"speedtest_download_speed_gt,omitempty"`
-	SpeedtestDownloadSpeedLt  *float64 `json:"speedtest_download_speed_lt,omitempty"`
-	SpeedtestUploadSpeedGt    *float64 `json:"speedtest_upload_speed_gt,omitempty"`
-	SpeedtestUploadSpeedLt    *float64 `json:"speedtest_upload_speed_lt,omitempty"`
+	SpeedtestDownloadSpeedGt  *float64 `json:"speedtest_download_gt,omitempty"`
+	SpeedtestDownloadSpeedLt  *float64 `json:"speedtest_download_lt,omitempty"`
+	SpeedtestUploadSpeedGt    *float64 `json:"speedtest_upload_gt,omitempty"`
+	SpeedtestUploadSpeedLt    *float64 `json:"speedtest_upload_lt,omitempty"`
 	SpeedtestPingGt           *float64 `json:"speedtest_ping_gt,omitempty"`
 	SpeedtestPingLt           *float64 `json:"speedtest_ping_lt,omitempty"`
 	Country                   *string  `json:"country,omitempty"`
@@ -135,6 +135,7 @@ type ProviderInfo struct {
 	PubKey             string  `json:"pubkey"`
 	UsedProviderSpace  float64 `json:"used_provider_space"`
 	TotalProviderSpace float64 `json:"total_provider_space"`
+	MaxBagSizeBytes    uint64  `json:"max_bag_size_bytes"`
 }
 
 type StorageInfo struct {
@@ -189,6 +190,7 @@ type Telemetry struct {
 	Country                 *string  `json:"country"`
 	ISP                     *string  `json:"isp"`
 	CPUName                 *string  `json:"cpu_name"`
+	UpdatedAt               *uint64  `json:"updated_at"`
 	TotalProviderSpace      *float32 `json:"total_provider_space"`
 	UsedProviderSpace       *float32 `json:"used_provider_space"`
 	TotalRAM                *float32 `json:"total_ram"`
