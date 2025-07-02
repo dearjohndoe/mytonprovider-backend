@@ -52,6 +52,17 @@ func (h *handler) searchProviders(c *fiber.Ctx) (err error) {
 	})
 }
 
+func (h *handler) filtersRange(c *fiber.Ctx) (err error) {
+	filters, err := h.providers.GetFiltersRange(c.Context())
+	if err != nil {
+		return errorHandler(c, err)
+	}
+
+	return c.JSON(fiber.Map{
+		"filters_range": filters,
+	})
+}
+
 func (h *handler) updateTelemetry(c *fiber.Ctx) (err error) {
 	body := c.Body()
 	log := h.logger.With(

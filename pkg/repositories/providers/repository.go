@@ -17,6 +17,7 @@ type repository struct {
 type Repository interface {
 	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) (providers []db.ProviderDB, err error)
 	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) (providers []db.ProviderDB, err error)
+	GetFiltersRange(ctx context.Context) (filtersRange db.FiltersRange, err error)
 	UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error)
 	UpdateBenchmarks(ctx context.Context, benchmarks []db.BenchmarkUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
@@ -39,11 +40,11 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			COALESCE(p.uptime, 0) * 100 as uptime,
 			COALESCE(p.rating, 0) as rating,
 			p.max_span,
-			GREATEST(p.rate_per_mb_per_day * 1024 * 200 * 30) as price,
+			p.rate_per_mb_per_day * 1024 * 200 * 30 as price,
 			p.min_span,
 			p.max_bag_size_bytes,
 			p.registered_at,
-			coalesce(p.is_send_telemetry, false) as is_send_telemetry,
+			coalCOALESCEesce(p.is_send_telemetry, false) as is_send_telemetry,
 			t.storage_git_hash,
 			t.provider_git_hash,
 			t.total_provider_space,
@@ -113,6 +114,84 @@ func (r *repository) GetFilteredProviders(ctx context.Context, filters db.Provid
 	return
 }
 
+func (r *repository) GetFiltersRange(ctx context.Context) (filtersRange db.FiltersRange, err error) {
+	query := `
+		SELECT 
+			-- Provider ranges
+			COALESCE(MAX(p.rating), 5.0) + 0.1 as rating_max,
+			MAX(EXTRACT(DAYS FROM (NOW() - p.registered_at)))::bigint as reg_time_days_max,
+			COALESCE(MIN(p.min_span), 0)::bigint as min_span_min,
+			COALESCE(MAX(p.min_span), 0)::bigint as min_span_max,
+			COALESCE(MIN(p.max_span), 0)::bigint as max_span_min,
+			COALESCE(MAX(p.max_span), 0)::bigint as max_span_max,
+			MIN(p.max_bag_size_bytes / 1024 / 1024)::bigint as max_bag_size_mb_min,
+			MAX(p.max_bag_size_bytes / 1024 / 1024)::bigint as max_bag_size_mb_max,
+			COALESCE(MAX(p.rate_per_mb_per_day * 1024 * 200 * 30), 0.0) + 0.1 as price_max,
+			
+			-- Telemetry ranges
+			COALESCE(MIN(t.total_provider_space), 0)::int as total_provider_space_min,
+			(COALESCE(MAX(t.total_provider_space), 1) + 1)::int as total_provider_space_max,
+			(COALESCE(MAX(t.used_provider_space), 1) + 1)::int as used_provider_space_max,
+			COALESCE(MAX(t.cpu_number), 1)::int as cpu_number_max,
+			(COALESCE(MIN(t.total_ram), 0.1) - 0.1)::real as total_ram_min,
+			(COALESCE(MAX(t.total_ram), 1.0) + 0.1)::real as total_ram_max,
+			
+			-- Benchmark ranges (parsing string speeds to int for comparison)
+			COALESCE(MIN(providers.parse_speed_to_int(b.qd64_disk_read_speed)), 0)::bigint as benchmark_disk_read_speed_min,
+			COALESCE(MAX(providers.parse_speed_to_int(b.qd64_disk_read_speed)), 0)::bigint as benchmark_disk_read_speed_max,
+			COALESCE(MIN(providers.parse_speed_to_int(b.qd64_disk_write_speed)), 0)::bigint as benchmark_disk_write_speed_min,
+			COALESCE(MAX(providers.parse_speed_to_int(b.qd64_disk_write_speed)), 0)::bigint as benchmark_disk_write_speed_max,
+			COALESCE(MIN(b.speedtest_download), 0)::bigint as speedtest_download_speed_min,
+			COALESCE(MAX(b.speedtest_download), 0)::bigint as speedtest_download_speed_max,
+			COALESCE(MIN(b.speedtest_upload), 0)::bigint as speedtest_upload_speed_min,
+			COALESCE(MAX(b.speedtest_upload), 0)::bigint as speedtest_upload_speed_max,
+			COALESCE(MIN(b.speedtest_ping), 0)::int as speedtest_ping_min,
+			COALESCE(MAX(b.speedtest_ping), 0)::int as speedtest_ping_max
+		FROM providers.providers p
+			LEFT JOIN providers.telemetry t ON p.public_key = t.public_key
+			LEFT JOIN providers.benchmarks b ON p.public_key = b.public_key
+		WHERE p.is_initialized AND p.rating IS NOT NULL AND p.uptime IS NOT NULL
+	`
+
+	row := r.db.QueryRow(ctx, query)
+
+	err = row.Scan(
+		&filtersRange.RatingMax,
+		&filtersRange.RegTimeDaysMax,
+		&filtersRange.MinSpanMin,
+		&filtersRange.MinSpanMax,
+		&filtersRange.MaxSpanMin,
+		&filtersRange.MaxSpanMax,
+		&filtersRange.MaxBagSizeMbMin,
+		&filtersRange.MaxBagSizeMbMax,
+		&filtersRange.PriceMax,
+
+		&filtersRange.TotalProviderSpaceMin,
+		&filtersRange.TotalProviderSpaceMax,
+		&filtersRange.UsedProviderSpaceMax,
+		&filtersRange.CPUNumberMax,
+		&filtersRange.TotalRAMMin,
+		&filtersRange.TotalRAMMax,
+
+		&filtersRange.BenchmarkDiskReadSpeedMin,
+		&filtersRange.BenchmarkDiskReadSpeedMax,
+		&filtersRange.BenchmarkDiskWriteSpeedMin,
+		&filtersRange.BenchmarkDiskWriteSpeedMax,
+		&filtersRange.SpeedtestDownloadSpeedMin,
+		&filtersRange.SpeedtestDownloadSpeedMax,
+		&filtersRange.SpeedtestUploadSpeedMin,
+		&filtersRange.SpeedtestUploadSpeedMax,
+		&filtersRange.SpeedtestPingMin,
+		&filtersRange.SpeedtestPingMax,
+	)
+
+	if err != nil {
+		return
+	}
+
+	return
+}
+
 func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error) {
 	if len(telemetry) == 0 {
 		return
@@ -160,7 +239,7 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			cpu_is_virtual
 		)
 		SELECT 
-			t->>'public_key',
+			lower(t->>'public_key'),
 			t->>'storage_git_hash',
 			t->>'provider_git_hash',
 			t->>'cpu_name',
@@ -228,7 +307,7 @@ func (r *repository) UpdateBenchmarks(ctx context.Context, benchmarks []db.Bench
 
 	query := `
 		INSERT INTO providers.benchmarks (
-			lower(public_key),
+			public_key,
 			disk,
 			network,
 			qd64_disk_read_speed,
@@ -240,30 +319,30 @@ func (r *repository) UpdateBenchmarks(ctx context.Context, benchmarks []db.Bench
 			country,
 			isp
 		)
-			SELECT
-				b->>'public_key',
-				(b->>'disk')::jsonb,
-				(b->>'network')::jsonb,
-				b->>'qd64_disk_read_speed',
-				b->>'qd64_disk_write_speed',
-				(b->>'benchmark_timestamp')::timestamptz,
-				(b->>'speedtest_download')::double precision,
-				(b->>'speedtest_upload')::double precision,
-				(b->>'speedtest_ping')::float8,
-				b->>'country',
-				b->>'isp'
-			FROM jsonb_array_elements($1::jsonb) AS b
-			ON CONFLICT (public_key) DO UPDATE SET
-				disk = EXCLUDED.disk,
-				network = EXCLUDED.network,
-				qd64_disk_read_speed = EXCLUDED.qd64_disk_read_speed,
-				qd64_disk_write_speed = EXCLUDED.qd64_disk_write_speed,
-				benchmark_timestamp = EXCLUDED.benchmark_timestamp,
-				speedtest_download = EXCLUDED.speedtest_download,
-				speedtest_upload = EXCLUDED.speedtest_upload,
-				speedtest_ping = EXCLUDED.speedtest_ping,
-				country = EXCLUDED.country,
-				isp = EXCLUDED.isp
+		SELECT
+			lower(b->>'public_key'),
+			(b->>'disk')::jsonb,
+			(b->>'network')::jsonb,
+			b->>'qd64_disk_read_speed',
+			b->>'qd64_disk_write_speed',
+			(b->>'benchmark_timestamp')::timestamptz,
+			(b->>'speedtest_download')::double precision,
+			(b->>'speedtest_upload')::double precision,
+			(b->>'speedtest_ping')::float8,
+			b->>'country',
+			b->>'isp'
+		FROM jsonb_array_elements($1::jsonb) AS b
+		ON CONFLICT (public_key) DO UPDATE SET
+			disk = EXCLUDED.disk,
+			network = EXCLUDED.network,
+			qd64_disk_read_speed = EXCLUDED.qd64_disk_read_speed,
+			qd64_disk_write_speed = EXCLUDED.qd64_disk_write_speed,
+			benchmark_timestamp = EXCLUDED.benchmark_timestamp,
+			speedtest_download = EXCLUDED.speedtest_download,
+			speedtest_upload = EXCLUDED.speedtest_upload,
+			speedtest_ping = EXCLUDED.speedtest_ping,
+			country = EXCLUDED.country,
+			isp = EXCLUDED.isp
 	`
 
 	_, err = r.db.Exec(ctx, query, benchmarks)
@@ -279,7 +358,7 @@ func (r *repository) AddStatuses(ctx context.Context, providers []db.ProviderSta
 	query := `
 		INSERT INTO providers.statuses (public_key, is_online, check_time)
 		SELECT
-			p->>'public_key',
+			lower(p->>'public_key'),
 			(p->>'is_online')::boolean,
 			NOW()
 		FROM jsonb_array_elements($1::jsonb) AS p
@@ -435,7 +514,7 @@ func (r *repository) AddProviders(ctx context.Context, providers []db.ProviderCr
 	query := `
 		INSERT INTO providers.providers (public_key, address, registered_at, is_initialized)
 		SELECT 
-			p->>'public_key',
+			lower(p->>'public_key'),
 			p->>'address',
 			(p->>'registered_at')::timestamptz,
 			false

@@ -17,49 +17,49 @@ type ProviderCreate struct {
 }
 
 type ProviderFilters struct {
-	RatingGt                  *float64 `json:"rating_gt,omitempty"`
-	RatingLt                  *float64 `json:"rating_lt,omitempty"`
-	RegTimeDaysGt             *int64   `json:"reg_time_days_gt,omitempty"`
-	RegTimeDaysLt             *int64   `json:"reg_time_days_lt,omitempty"`
-	UpTimeGtPercent           *float64 `json:"uptime_gt_percent,omitempty"`
-	UpTimeLtPercent           *float64 `json:"uptime_lt_percent,omitempty"`
-	WorkingTimeGtSec          *int64   `json:"working_time_gt_sec,omitempty"`
-	WorkingTimeLtSec          *int64   `json:"working_time_lt_sec,omitempty"`
-	PriceGt                   *float64 `json:"price_gt,omitempty"`
-	PriceLt                   *float64 `json:"price_lt,omitempty"`
-	MinSpanGt                 *int64   `json:"min_span_gt,omitempty"`
-	MinSpanLt                 *int64   `json:"min_span_lt,omitempty"`
-	MaxSpanGt                 *int64   `json:"max_span_gt,omitempty"`
-	MaxSpanLt                 *int64   `json:"max_span_lt,omitempty"`
-	MaxBagSizeBytesGt         *int64   `json:"max_bag_size_bytes_gt,omitempty"`
-	MaxBagSizeBytesLt         *int64   `json:"max_bag_size_bytes_lt,omitempty"`
-	IsSendTelemetry           *bool    `json:"is_send_telemetry,omitempty"`
-	TotalProviderSpaceGt      *float64 `json:"total_provider_space_gt,omitempty"`
-	TotalProviderSpaceLt      *float64 `json:"total_provider_space_lt,omitempty"`
-	UsedProviderSpaceGt       *float64 `json:"used_provider_space_gt,omitempty"`
-	UsedProviderSpaceLt       *float64 `json:"used_provider_space_lt,omitempty"`
-	StorageGitHash            *string  `json:"storage_git_hash,omitempty"`
-	ProviderGitHash           *string  `json:"provider_git_hash,omitempty"`
-	CPUNumberGt               *int32   `json:"cpu_number_gt,omitempty"`
-	CPUNumberLt               *int32   `json:"cpu_number_lt,omitempty"`
-	CPUName                   *string  `json:"cpu_name,omitempty"`
-	CPUIsVirtual              *bool    `json:"cpu_is_virtual,omitempty"`
-	TotalRamGt                *float32 `json:"total_ram_gt,omitempty"`
-	TotalRamLt                *float32 `json:"total_ram_lt,omitempty"`
-	UsageRamPercentGt         *float32 `json:"ram_usage_percent_gt,omitempty"`
-	UsageRamPercentLt         *float32 `json:"ram_usage_percent_lt,omitempty"`
-	BenchmarkDiskReadSpeedGt  *float64 `json:"benchmark_disk_read_speed_gt,omitempty"`
-	BenchmarkDiskReadSpeedLt  *float64 `json:"benchmark_disk_read_speed_lt,omitempty"`
-	BenchmarkDiskWriteSpeedGt *float64 `json:"benchmark_disk_write_speed_gt,omitempty"`
-	BenchmarkDiskWriteSpeedLt *float64 `json:"benchmark_disk_write_speed_lt,omitempty"`
-	SpeedtestDownloadSpeedGt  *float64 `json:"speedtest_download_gt,omitempty"`
-	SpeedtestDownloadSpeedLt  *float64 `json:"speedtest_download_lt,omitempty"`
-	SpeedtestUploadSpeedGt    *float64 `json:"speedtest_upload_gt,omitempty"`
-	SpeedtestUploadSpeedLt    *float64 `json:"speedtest_upload_lt,omitempty"`
-	SpeedtestPingGt           *float64 `json:"speedtest_ping_gt,omitempty"`
-	SpeedtestPingLt           *float64 `json:"speedtest_ping_lt,omitempty"`
-	Country                   *string  `json:"country,omitempty"`
-	ISP                       *string  `json:"isp,omitempty"`
+	StorageGitHash               *string  `json:"storage_git_hash,omitempty"`
+	ProviderGitHash              *string  `json:"provider_git_hash,omitempty"`
+	CPUName                      *string  `json:"cpu_name,omitempty"`
+	Country                      *string  `json:"country,omitempty"`
+	ISP                          *string  `json:"isp,omitempty"`
+	RegTimeDaysGt                *int64   `json:"reg_time_days_gt,omitempty"`
+	RegTimeDaysLt                *int64   `json:"reg_time_days_lt,omitempty"`
+	WorkingTimeGtSec             *int64   `json:"working_time_gt_sec,omitempty"`
+	WorkingTimeLtSec             *int64   `json:"working_time_lt_sec,omitempty"`
+	MinSpanGt                    *int64   `json:"min_span_gt,omitempty"`
+	MinSpanLt                    *int64   `json:"min_span_lt,omitempty"`
+	MaxSpanGt                    *int64   `json:"max_span_gt,omitempty"`
+	MaxSpanLt                    *int64   `json:"max_span_lt,omitempty"`
+	MaxBagSizeBytesGt            *int64   `json:"max_bag_size_bytes_gt,omitempty"`
+	MaxBagSizeBytesLt            *int64   `json:"max_bag_size_bytes_lt,omitempty"`
+	BenchmarkDiskReadSpeedKiBGt  *int64   `json:"benchmark_disk_read_speed_gt,omitempty"`
+	BenchmarkDiskReadSpeedKiBLt  *int64   `json:"benchmark_disk_read_speed_lt,omitempty"`
+	BenchmarkDiskWriteSpeedKiBGt *int64   `json:"benchmark_disk_write_speed_gt,omitempty"`
+	BenchmarkDiskWriteSpeedKiBLt *int64   `json:"benchmark_disk_write_speed_lt,omitempty"`
+	SpeedtestDownloadSpeedGt     *int64   `json:"speedtest_download_gt,omitempty"`
+	SpeedtestDownloadSpeedLt     *int64   `json:"speedtest_download_lt,omitempty"`
+	SpeedtestUploadSpeedGt       *int64   `json:"speedtest_upload_gt,omitempty"`
+	SpeedtestUploadSpeedLt       *int64   `json:"speedtest_upload_lt,omitempty"`
+	SpeedtestPingGt              *int64   `json:"speedtest_ping_gt,omitempty"`
+	SpeedtestPingLt              *int64   `json:"speedtest_ping_lt,omitempty"`
+	RatingGt                     *float64 `json:"rating_gt,omitempty"`
+	RatingLt                     *float64 `json:"rating_lt,omitempty"`
+	UpTimeGtPercent              *float64 `json:"uptime_gt_percent,omitempty"`
+	UpTimeLtPercent              *float64 `json:"uptime_lt_percent,omitempty"`
+	PriceGt                      *float64 `json:"price_gt,omitempty"`
+	PriceLt                      *float64 `json:"price_lt,omitempty"`
+	TotalProviderSpaceGt         *float64 `json:"total_provider_space_gt,omitempty"`
+	TotalProviderSpaceLt         *float64 `json:"total_provider_space_lt,omitempty"`
+	UsedProviderSpaceGt          *float64 `json:"used_provider_space_gt,omitempty"`
+	UsedProviderSpaceLt          *float64 `json:"used_provider_space_lt,omitempty"`
+	CPUNumberGt                  *int32   `json:"cpu_number_gt,omitempty"`
+	CPUNumberLt                  *int32   `json:"cpu_number_lt,omitempty"`
+	TotalRamGt                   *float32 `json:"total_ram_gt,omitempty"`
+	TotalRamLt                   *float32 `json:"total_ram_lt,omitempty"`
+	UsageRamPercentGt            *float32 `json:"ram_usage_percent_gt,omitempty"`
+	UsageRamPercentLt            *float32 `json:"ram_usage_percent_lt,omitempty"`
+	CPUIsVirtual                 *bool    `json:"cpu_is_virtual,omitempty"`
+	IsSendTelemetry              *bool    `json:"is_send_telemetry,omitempty"`
 }
 
 type ProviderSort struct {
@@ -134,6 +134,34 @@ type TelemetryDB struct {
 	SpeedtestPing           *float32 `json:"speedtest_ping"`
 	CPUNumber               *uint16  `json:"cpu_number"`
 	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`
+}
+
+type FiltersRange struct {
+	RegTimeDaysMax             int64
+	MinSpanMin                 int64
+	MinSpanMax                 int64
+	MaxSpanMin                 int64
+	MaxSpanMax                 int64
+	MaxBagSizeMbMin            int64
+	MaxBagSizeMbMax            int64
+	BenchmarkDiskReadSpeedMin  int64
+	BenchmarkDiskReadSpeedMax  int64
+	BenchmarkDiskWriteSpeedMin int64
+	BenchmarkDiskWriteSpeedMax int64
+	SpeedtestDownloadSpeedMin  int64
+	SpeedtestDownloadSpeedMax  int64
+	SpeedtestUploadSpeedMin    int64
+	SpeedtestUploadSpeedMax    int64
+	TotalProviderSpaceMin      int64
+	TotalProviderSpaceMax      int64
+	UsedProviderSpaceMax       int64
+	RatingMax                  float64
+	PriceMax                   float64
+	CPUNumberMax               int32
+	SpeedtestPingMin           int32
+	SpeedtestPingMax           int32
+	TotalRAMMin                float32
+	TotalRAMMax                float32
 }
 
 type ProviderDB struct {

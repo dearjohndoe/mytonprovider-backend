@@ -38,6 +38,17 @@ func (m *metricsMiddleware) GetFilteredProviders(ctx context.Context, filters db
 	return m.repo.GetFilteredProviders(ctx, filters, sort, limit, offset)
 }
 
+func (m *metricsMiddleware) GetFiltersRange(ctx context.Context) (filtersRange db.FiltersRange, err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"GetFiltersRange", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.GetFiltersRange(ctx)
+}
+
 func (m *metricsMiddleware) UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error) {
 	defer func(s time.Time) {
 		labels := []string{

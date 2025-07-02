@@ -46,17 +46,16 @@ func (h *handler) RegisterRoutes() {
 	}))
 
 	h.server.Get("/health", h.health)
-
 	h.server.Get("/metrics", h.authorizationMiddleware, h.metrics)
 
 	apiv1 := h.server.Group("/api/v1", h.loggerMiddleware)
 	{
-		apiv1.Post("/providers/search", h.searchProviders)
-
-		apiv1.Post("/providers", h.updateTelemetry)
+		providers := apiv1.Group("/providers")
+		providers.Post("/search", h.searchProviders)
+		providers.Get("/filters", h.filtersRange)
+		providers.Post("", h.updateTelemetry)
+		providers.Get("", h.authorizationMiddleware, h.getLatestTelemetry)
 
 		apiv1.Post("/benchmarks", h.updateBenchmarks)
-
-		apiv1.Get("/providers", h.authorizationMiddleware, h.getLatestTelemetry)
 	}
 }

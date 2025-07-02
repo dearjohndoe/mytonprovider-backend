@@ -23,12 +23,14 @@ type service struct {
 
 type providers interface {
 	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) ([]db.ProviderDB, error)
+	GetFiltersRange(ctx context.Context) (db.FiltersRange, error)
 	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.ProviderDB, error)
 }
 
 type Providers interface {
 	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error)
 	GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error)
+	GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error)
 	UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error)
 	UpdateBenchmarks(ctx context.Context, benchmark *v1.BenchmarksRequest) (err error)
 }
@@ -48,6 +50,43 @@ func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersReq
 
 func (s *service) GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error) {
 	// logic in cache middleware
+
+	return
+}
+
+func (s *service) GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error) {
+	r, err := s.providers.GetFiltersRange(ctx)
+	if err != nil {
+		return
+	}
+
+	filtersRange = v1.FiltersRangeResp{
+		RatingMax:                  r.RatingMax,
+		RegTimeDaysMax:             r.RegTimeDaysMax,
+		PriceMax:                   r.PriceMax,
+		MinSpanMin:                 r.MinSpanMin,
+		MinSpanMax:                 r.MinSpanMax,
+		MaxSpanMin:                 r.MaxSpanMin,
+		MaxSpanMax:                 r.MaxSpanMax,
+		MaxBagSizeMbMin:            r.MaxBagSizeMbMin,
+		MaxBagSizeMbMax:            r.MaxBagSizeMbMax,
+		TotalProviderSpaceMin:      r.TotalProviderSpaceMin,
+		TotalProviderSpaceMax:      r.TotalProviderSpaceMax,
+		UsedProviderSpaceMax:       r.UsedProviderSpaceMax,
+		CPUNumberMax:               r.CPUNumberMax,
+		TotalRamMin:                r.TotalRAMMin,
+		TotalRamMax:                r.TotalRAMMax,
+		BenchmarkDiskReadSpeedMin:  r.BenchmarkDiskReadSpeedMin,
+		BenchmarkDiskReadSpeedMax:  r.BenchmarkDiskReadSpeedMax,
+		BenchmarkDiskWriteSpeedMin: r.BenchmarkDiskWriteSpeedMin,
+		BenchmarkDiskWriteSpeedMax: r.BenchmarkDiskWriteSpeedMax,
+		SpeedtestDownloadSpeedMin:  r.SpeedtestDownloadSpeedMin,
+		SpeedtestDownloadSpeedMax:  r.SpeedtestDownloadSpeedMax,
+		SpeedtestUploadSpeedMin:    r.SpeedtestUploadSpeedMin,
+		SpeedtestUploadSpeedMax:    r.SpeedtestUploadSpeedMax,
+		SpeedtestPingMin:           r.SpeedtestPingMin,
+		SpeedtestPingMax:           r.SpeedtestPingMax,
+	}
 
 	return
 }
@@ -155,49 +194,49 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 
 func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters, db.ProviderSort, int, int) {
 	filters := db.ProviderFilters{
-		RatingGt:                  req.Filters.RatingGt,
-		RatingLt:                  req.Filters.RatingLt,
-		RegTimeDaysGt:             req.Filters.RegTimeDaysGt,
-		RegTimeDaysLt:             req.Filters.RegTimeDaysLt,
-		UpTimeGtPercent:           req.Filters.UpTimeGtPercent,
-		UpTimeLtPercent:           req.Filters.UpTimeLtPercent,
-		WorkingTimeGtSec:          req.Filters.WorkingTimeGtSec,
-		WorkingTimeLtSec:          req.Filters.WorkingTimeLtSec,
-		PriceGt:                   req.Filters.PriceGt,
-		PriceLt:                   req.Filters.PriceLt,
-		MinSpanGt:                 req.Filters.MinSpanGt,
-		MinSpanLt:                 req.Filters.MinSpanLt,
-		MaxSpanGt:                 req.Filters.MaxSpanGt,
-		MaxSpanLt:                 req.Filters.MaxSpanLt,
-		MaxBagSizeBytesGt:         req.Filters.MaxBagSizeBytesGt,
-		MaxBagSizeBytesLt:         req.Filters.MaxBagSizeBytesLt,
-		IsSendTelemetry:           req.Filters.IsSendTelemetry,
-		TotalProviderSpaceGt:      req.Filters.TotalProviderSpaceGt,
-		TotalProviderSpaceLt:      req.Filters.TotalProviderSpaceLt,
-		UsedProviderSpaceGt:       req.Filters.UsedProviderSpaceGt,
-		UsedProviderSpaceLt:       req.Filters.UsedProviderSpaceLt,
-		StorageGitHash:            req.Filters.StorageGitHash,
-		ProviderGitHash:           req.Filters.ProviderGitHash,
-		CPUNumberGt:               req.Filters.CPUNumberGt,
-		CPUNumberLt:               req.Filters.CPUNumberLt,
-		CPUName:                   req.Filters.CPUName,
-		CPUIsVirtual:              req.Filters.CPUIsVirtual,
-		TotalRamGt:                req.Filters.TotalRamGt,
-		TotalRamLt:                req.Filters.TotalRamLt,
-		UsageRamPercentGt:         req.Filters.UsageRamPercentGt,
-		UsageRamPercentLt:         req.Filters.UsageRamPercentLt,
-		BenchmarkDiskReadSpeedGt:  req.Filters.BenchmarkDiskReadSpeedGt,
-		BenchmarkDiskReadSpeedLt:  req.Filters.BenchmarkDiskReadSpeedLt,
-		BenchmarkDiskWriteSpeedGt: req.Filters.BenchmarkDiskWriteSpeedGt,
-		BenchmarkDiskWriteSpeedLt: req.Filters.BenchmarkDiskWriteSpeedLt,
-		SpeedtestDownloadSpeedGt:  req.Filters.SpeedtestDownloadSpeedGt,
-		SpeedtestDownloadSpeedLt:  req.Filters.SpeedtestDownloadSpeedLt,
-		SpeedtestUploadSpeedGt:    req.Filters.SpeedtestUploadSpeedGt,
-		SpeedtestUploadSpeedLt:    req.Filters.SpeedtestUploadSpeedLt,
-		SpeedtestPingGt:           req.Filters.SpeedtestPingGt,
-		SpeedtestPingLt:           req.Filters.SpeedtestPingLt,
-		Country:                   req.Filters.Country,
-		ISP:                       req.Filters.ISP,
+		RatingGt:                     req.Filters.RatingGt,
+		RatingLt:                     req.Filters.RatingLt,
+		RegTimeDaysGt:                req.Filters.RegTimeDaysGt,
+		RegTimeDaysLt:                req.Filters.RegTimeDaysLt,
+		UpTimeGtPercent:              req.Filters.UpTimeGtPercent,
+		UpTimeLtPercent:              req.Filters.UpTimeLtPercent,
+		WorkingTimeGtSec:             req.Filters.WorkingTimeGtSec,
+		WorkingTimeLtSec:             req.Filters.WorkingTimeLtSec,
+		PriceGt:                      req.Filters.PriceGt,
+		PriceLt:                      req.Filters.PriceLt,
+		MinSpanGt:                    req.Filters.MinSpanGt,
+		MinSpanLt:                    req.Filters.MinSpanLt,
+		MaxSpanGt:                    req.Filters.MaxSpanGt,
+		MaxSpanLt:                    req.Filters.MaxSpanLt,
+		MaxBagSizeBytesGt:            req.Filters.MaxBagSizeMbGt,
+		MaxBagSizeBytesLt:            req.Filters.MaxBagSizeMbLt,
+		IsSendTelemetry:              req.Filters.IsSendTelemetry,
+		TotalProviderSpaceGt:         req.Filters.TotalProviderSpaceGt,
+		TotalProviderSpaceLt:         req.Filters.TotalProviderSpaceLt,
+		UsedProviderSpaceGt:          req.Filters.UsedProviderSpaceGt,
+		UsedProviderSpaceLt:          req.Filters.UsedProviderSpaceLt,
+		StorageGitHash:               req.Filters.StorageGitHash,
+		ProviderGitHash:              req.Filters.ProviderGitHash,
+		CPUNumberGt:                  req.Filters.CPUNumberGt,
+		CPUNumberLt:                  req.Filters.CPUNumberLt,
+		CPUName:                      req.Filters.CPUName,
+		CPUIsVirtual:                 req.Filters.CPUIsVirtual,
+		TotalRamGt:                   req.Filters.TotalRamGt,
+		TotalRamLt:                   req.Filters.TotalRamLt,
+		UsageRamPercentGt:            req.Filters.UsageRamPercentGt,
+		UsageRamPercentLt:            req.Filters.UsageRamPercentLt,
+		BenchmarkDiskReadSpeedKiBGt:  req.Filters.BenchmarkDiskReadSpeedGt,
+		BenchmarkDiskReadSpeedKiBLt:  req.Filters.BenchmarkDiskReadSpeedLt,
+		BenchmarkDiskWriteSpeedKiBGt: req.Filters.BenchmarkDiskWriteSpeedGt,
+		BenchmarkDiskWriteSpeedKiBLt: req.Filters.BenchmarkDiskWriteSpeedLt,
+		SpeedtestDownloadSpeedGt:     req.Filters.SpeedtestDownloadSpeedGt,
+		SpeedtestDownloadSpeedLt:     req.Filters.SpeedtestDownloadSpeedLt,
+		SpeedtestUploadSpeedGt:       req.Filters.SpeedtestUploadSpeedGt,
+		SpeedtestUploadSpeedLt:       req.Filters.SpeedtestUploadSpeedLt,
+		SpeedtestPingGt:              req.Filters.SpeedtestPingGt,
+		SpeedtestPingLt:              req.Filters.SpeedtestPingLt,
+		Country:                      req.Filters.Country,
+		ISP:                          req.Filters.ISP,
 	}
 
 	sortColumn := constants.RatingColumn

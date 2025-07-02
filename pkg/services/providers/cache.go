@@ -9,19 +9,38 @@ import (
 	v1 "mytonprovider-backend/pkg/models/api/v1"
 )
 
+const (
+	filtersRangeKey = "filtersRange"
+)
+
 type cacheMiddleware struct {
-	svc              Providers
-	telemetryBuffer  *cache.SimpleCache
-	benchmarksBuffer *cache.SimpleCache
-	lates            *cache.SimpleCache
+	svc                   Providers
+	telemetryBuffer       *cache.SimpleCache
+	benchmarksBuffer      *cache.SimpleCache
+	latestTelemetryBuffer *cache.SimpleCache
+	cache                 *cache.SimpleCache
 }
 
 func (c *cacheMiddleware) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error) {
 	return c.svc.SearchProviders(ctx, req)
 }
 
+func (c *cacheMiddleware) GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error) {
+	v, ok := c.cache.Get(filtersRangeKey)
+	if !ok {
+		return c.actualFiltersRange(ctx)
+	}
+
+	filtersRange, ok = v.(v1.FiltersRangeResp)
+	if ok {
+		return
+	}
+
+	return c.actualFiltersRange(ctx)
+}
+
 func (c *cacheMiddleware) GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error) {
-	data := c.lates.GetAll()
+	data := c.latestTelemetryBuffer.GetAll()
 	if len(data) == 0 {
 		return
 	}
@@ -43,7 +62,7 @@ func (c *cacheMiddleware) UpdateTelemetry(ctx context.Context, telemetry *v1.Tel
 	}
 
 	c.telemetryBuffer.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
-	c.lates.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
+	c.latestTelemetryBuffer.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
 
 	return
 }
@@ -59,6 +78,16 @@ func (c *cacheMiddleware) UpdateBenchmarks(ctx context.Context, benchmark *v1.Be
 	return
 }
 
+func (c *cacheMiddleware) actualFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error) {
+	filtersRange, err = c.svc.GetFiltersRange(ctx)
+	if err != nil {
+		return
+	}
+
+	c.cache.Set(filtersRangeKey, filtersRange)
+	return
+}
+
 func NewCacheMiddleware(
 	svc Providers,
 	telemetry *cache.SimpleCache,
@@ -66,9 +95,10 @@ func NewCacheMiddleware(
 ) Providers {
 	latest := cache.NewSimpleCache(2 * time.Minute)
 	return &cacheMiddleware{
-		svc:              svc,
-		telemetryBuffer:  telemetry,
-		benchmarksBuffer: benchmarks,
-		lates:            latest,
+		svc:                   svc,
+		telemetryBuffer:       telemetry,
+		benchmarksBuffer:      benchmarks,
+		cache:                 cache.NewSimpleCache(1 * time.Minute),
+		latestTelemetryBuffer: latest,
 	}
 }

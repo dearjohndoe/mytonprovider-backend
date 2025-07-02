@@ -48,6 +48,18 @@ func (c *SimpleCache) Set(key string, value interface{}) {
 	}
 }
 
+// Gets the value for the given key if present and not expired.
+func (c *SimpleCache) Get(key string) (interface{}, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	it, ok := c.items[key]
+	if !ok || time.Now().After(it.expiryTime) {
+		delete(c.items, key)
+		return nil, false
+	}
+	return it.value, true
+}
+
 // Release gets and deletes the value for the given key if present and not expired.
 func (c *SimpleCache) Release(key string) (interface{}, bool) {
 	c.mu.Lock()

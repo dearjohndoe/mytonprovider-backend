@@ -15,6 +15,34 @@ type Sort struct {
 	Order  string `json:"order,omitempty"`  // "asc" or "desc"
 }
 
+type FiltersRangeResp struct {
+	RegTimeDaysMax             int64   `json:"reg_time_days_max"`
+	MinSpanMin                 int64   `json:"min_span_min"`
+	MinSpanMax                 int64   `json:"min_span_max"`
+	MaxSpanMin                 int64   `json:"max_span_min"`
+	MaxSpanMax                 int64   `json:"max_span_max"`
+	MaxBagSizeMbMin            int64   `json:"max_bag_size_mb_min"`
+	MaxBagSizeMbMax            int64   `json:"max_bag_size_mb_max"`
+	TotalProviderSpaceMin      int64   `json:"total_provider_space_min"`
+	TotalProviderSpaceMax      int64   `json:"total_provider_space_max"`
+	UsedProviderSpaceMax       int64   `json:"used_provider_space_max"`
+	BenchmarkDiskReadSpeedMin  int64   `json:"benchmark_disk_read_speed_min"`
+	BenchmarkDiskReadSpeedMax  int64   `json:"benchmark_disk_read_speed_max"`
+	BenchmarkDiskWriteSpeedMin int64   `json:"benchmark_disk_write_speed_min"`
+	BenchmarkDiskWriteSpeedMax int64   `json:"benchmark_disk_write_speed_max"`
+	SpeedtestDownloadSpeedMin  int64   `json:"speedtest_download_min"`
+	SpeedtestDownloadSpeedMax  int64   `json:"speedtest_download_max"`
+	SpeedtestUploadSpeedMin    int64   `json:"speedtest_upload_min"`
+	SpeedtestUploadSpeedMax    int64   `json:"speedtest_upload_max"`
+	RatingMax                  float64 `json:"rating_max"`
+	PriceMax                   float64 `json:"price_max"`
+	CPUNumberMax               int32   `json:"cpu_number_max"`
+	SpeedtestPingMin           int32   `json:"speedtest_ping_min"`
+	SpeedtestPingMax           int32   `json:"speedtest_ping_max"`
+	TotalRamMin                float32 `json:"total_ram_min"`
+	TotalRamMax                float32 `json:"total_ram_max"`
+}
+
 type Filters struct {
 	RatingGt                  *float64 `json:"rating_gt,omitempty"`
 	RatingLt                  *float64 `json:"rating_lt,omitempty"`
@@ -30,8 +58,8 @@ type Filters struct {
 	MinSpanLt                 *int64   `json:"min_span_lt,omitempty"`
 	MaxSpanGt                 *int64   `json:"max_span_gt,omitempty"`
 	MaxSpanLt                 *int64   `json:"max_span_lt,omitempty"`
-	MaxBagSizeBytesGt         *int64   `json:"max_bag_size_bytes_gt,omitempty"`
-	MaxBagSizeBytesLt         *int64   `json:"max_bag_size_bytes_lt,omitempty"`
+	MaxBagSizeMbGt            *int64   `json:"max_bag_size_mb_gt,omitempty"`
+	MaxBagSizeMbLt            *int64   `json:"max_bag_size_mb_lt,omitempty"`
 	IsSendTelemetry           *bool    `json:"is_send_telemetry,omitempty"`
 	TotalProviderSpaceGt      *float64 `json:"total_provider_space_gt,omitempty"`
 	TotalProviderSpaceLt      *float64 `json:"total_provider_space_lt,omitempty"`
@@ -47,16 +75,16 @@ type Filters struct {
 	TotalRamLt                *float32 `json:"total_ram_lt,omitempty"`
 	UsageRamPercentGt         *float32 `json:"usage_ram_percent_gt,omitempty"`
 	UsageRamPercentLt         *float32 `json:"usage_ram_percent_lt,omitempty"`
-	BenchmarkDiskReadSpeedGt  *float64 `json:"benchmark_disk_read_speed_gt,omitempty"`
-	BenchmarkDiskReadSpeedLt  *float64 `json:"benchmark_disk_read_speed_lt,omitempty"`
-	BenchmarkDiskWriteSpeedGt *float64 `json:"benchmark_disk_write_speed_gt,omitempty"`
-	BenchmarkDiskWriteSpeedLt *float64 `json:"benchmark_disk_write_speed_lt,omitempty"`
-	SpeedtestDownloadSpeedGt  *float64 `json:"speedtest_download_gt,omitempty"`
-	SpeedtestDownloadSpeedLt  *float64 `json:"speedtest_download_lt,omitempty"`
-	SpeedtestUploadSpeedGt    *float64 `json:"speedtest_upload_gt,omitempty"`
-	SpeedtestUploadSpeedLt    *float64 `json:"speedtest_upload_lt,omitempty"`
-	SpeedtestPingGt           *float64 `json:"speedtest_ping_gt,omitempty"`
-	SpeedtestPingLt           *float64 `json:"speedtest_ping_lt,omitempty"`
+	BenchmarkDiskReadSpeedGt  *int64   `json:"benchmark_disk_read_speed_gt,omitempty"`
+	BenchmarkDiskReadSpeedLt  *int64   `json:"benchmark_disk_read_speed_lt,omitempty"`
+	BenchmarkDiskWriteSpeedGt *int64   `json:"benchmark_disk_write_speed_gt,omitempty"`
+	BenchmarkDiskWriteSpeedLt *int64   `json:"benchmark_disk_write_speed_lt,omitempty"`
+	SpeedtestDownloadSpeedGt  *int64   `json:"speedtest_download_gt,omitempty"`
+	SpeedtestDownloadSpeedLt  *int64   `json:"speedtest_download_lt,omitempty"`
+	SpeedtestUploadSpeedGt    *int64   `json:"speedtest_upload_gt,omitempty"`
+	SpeedtestUploadSpeedLt    *int64   `json:"speedtest_upload_lt,omitempty"`
+	SpeedtestPingGt           *int64   `json:"speedtest_ping_gt,omitempty"`
+	SpeedtestPingLt           *int64   `json:"speedtest_ping_lt,omitempty"`
 	Country                   *string  `json:"country,omitempty"`
 	ISP                       *string  `json:"isp,omitempty"`
 }
