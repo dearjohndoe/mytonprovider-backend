@@ -24,6 +24,9 @@ type Repository interface {
 	UpdateUptime(ctx context.Context) (err error)
 	UpdateRating(ctx context.Context) (err error)
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
+	GetAllProvidersWallets(ctx context.Context) (wallets []db.ProviderWallet, err error)
+	AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error)
+	UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
 
@@ -471,6 +474,100 @@ func (r *repository) GetAllProvidersPubkeys(ctx context.Context) (pubkeys []stri
 	if err != nil {
 		return
 	}
+
+	return
+}
+
+func (r *repository) GetAllProvidersWallets(ctx context.Context) (wallets []db.ProviderWallet, err error) {
+	query := `
+		SELECT p.public_key, p.address, p.last_tx_lt
+		FROM providers.providers p
+		`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = nil
+			return
+		}
+
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var pubkey string
+		var address string
+		var lt uint64
+		if rErr := rows.Scan(&pubkey, &address, &lt); rErr != nil {
+			err = rErr
+			return
+		}
+		wallets = append(wallets, db.ProviderWallet{
+			PubKey:  pubkey,
+			Address: address,
+			LT:      lt,
+		})
+	}
+
+	err = rows.Err()
+
+	return
+}
+
+func (r *repository) AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error) {
+	if len(contracts) == 0 {
+		return
+	}
+
+	query := `
+		INSERT INTO providers.storage_contracts (
+			address,
+			providers_addresses,
+			bag_id,
+			owner_address,
+			size,
+			chunk_size,
+			last_tx_lt
+		)
+		SELECT 
+			c->>'address',
+			ARRAY(SELECT jsonb_object_keys(c->'providers_addresses'))::text[],
+			c->>'bag_id',
+			c->>'owner_address',
+			(c->>'size')::bigint,
+			(c->>'chunk_size')::bigint,
+			(c->>'last_tx_lt')::bigint
+		FROM jsonb_array_elements($1::jsonb) AS c
+		ON CONFLICT (address) DO UPDATE SET
+			last_tx_lt = EXCLUDED.last_tx_lt,
+			providers_addresses = EXCLUDED.providers_addresses
+	`
+
+	_, err = r.db.Exec(ctx, query, contracts)
+
+	return
+}
+
+func (r *repository) UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error) {
+	if len(providers) == 0 {
+		return
+	}
+
+	query := `
+		UPDATE providers.providers p
+		SET
+			last_tx_lt = c.last_tx_lt
+		FROM (
+			SELECT 
+				lower(p->>'public_key') AS public_key,
+				(p->>'last_tx_lt')::bigint AS last_tx_lt
+			FROM jsonb_array_elements($1::jsonb) AS p
+		) AS c
+		WHERE p.public_key = c.public_key
+	`
+
+	_, err = r.db.Exec(ctx, query, providers)
 
 	return
 }

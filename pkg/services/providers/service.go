@@ -243,7 +243,7 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 	if v, ok := constants.SortingMap[strings.ToLower(req.Sort.Column)]; ok {
 		sortColumn = v
 	}
-	order := constants.Asc
+	order := constants.Desc
 	if v, ok := constants.OrderMap[strings.ToLower(req.Sort.Order)]; ok {
 		order = v
 	}

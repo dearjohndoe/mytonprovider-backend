@@ -8,7 +8,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.52.8
 	github.com/jackc/pgx/v5 v5.7.5
 	github.com/xssnick/tonutils-go v1.13.0
-	github.com/xssnick/tonutils-storage-provider v0.3.6
+	github.com/xssnick/tonutils-storage-provider v0.3.7
 )
 
 require (

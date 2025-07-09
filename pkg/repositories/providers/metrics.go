@@ -126,6 +126,28 @@ func (m *metricsMiddleware) GetAllProvidersWallets(ctx context.Context) (wallets
 	return m.repo.GetAllProvidersWallets(ctx)
 }
 
+func (m *metricsMiddleware) UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"UpdateProvidersLT", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.UpdateProvidersLT(ctx, providers)
+}
+
+func (m *metricsMiddleware) AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"AddStorageContracts", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.AddStorageContracts(ctx, contracts)
+}
+
 func (m *metricsMiddleware) UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error) {
 	defer func(s time.Time) {
 		labels := []string{

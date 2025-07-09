@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/liteclient"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
+	pContract "github.com/xssnick/tonutils-storage-provider/pkg/contract"
 )
 
 const (
@@ -21,10 +23,13 @@ const (
 
 type client struct {
 	clientPool *liteclient.ConnectionPool
+	logger     *slog.Logger
 }
 
 type Client interface {
 	GetTransactions(ctx context.Context, addr string, lastProcessedLT uint64) (tx []*Transaction, err error)
+	GetStorageContractsInfo(ctx context.Context, addrs []string) (contracts []StorageContract, err error)
+	GetProvidersInfo(ctx context.Context, addrs []string) (contractsProviders []StorageContractProviders, err error)
 }
 
 // GetTransactions return all transactions between lastProcessedLT transaction and actual last transaction (both included)
@@ -85,36 +90,145 @@ list:
 	return
 }
 
+func (c *client) GetStorageContractsInfo(ctx context.Context, addrs []string) (contracts []StorageContract, err error) {
+	log := c.logger.With("method", "GetStorageContractsInfo")
+	api := ton.NewAPIClient(c.clientPool).WithTimeout(singleQueryTimeout).WithRetry(retries)
+	block, err := api.GetMasterchainInfo(ctx)
+	if err != nil {
+		err = fmt.Errorf("get masterchain info err: %w", err)
+		return
+	}
+
+	contracts = make([]StorageContract, 0, len(addrs))
+	for _, a := range addrs {
+		addr, err := address.ParseAddr(a)
+		if err != nil {
+			log.Error("invalid address", slog.String("address", a), slog.String("error", err.Error()))
+			continue
+		}
+
+		info, err := pContract.GetStorageInfoV1(ctx, api, block, addr)
+		if err != nil {
+			log.Error("get storage info", slog.String("address", a), slog.String("error", err.Error()))
+			continue
+		}
+
+		if info == nil {
+			log.Error("storage contract not found", slog.String("address", a))
+			continue
+		}
+
+		contracts = append(contracts, StorageContract{
+			Address:   a,
+			BagID:     fmt.Sprintf("%x", info.TorrentHash),
+			OwnerAddr: info.OwnerAddr.String(),
+			Size:      info.Size,
+			ChunkSize: info.ChunkSize,
+		})
+	}
+
+	return
+}
+
+func (c *client) GetProvidersInfo(ctx context.Context, addrs []string) (contractsProviders []StorageContractProviders, err error) {
+	log := c.logger.With("method", "GetProvidersInfo")
+	api := ton.NewAPIClient(c.clientPool).WithTimeout(singleQueryTimeout).WithRetry(retries)
+	block, err := api.GetMasterchainInfo(ctx)
+	if err != nil {
+		err = fmt.Errorf("get masterchain info err: %w", err)
+		return
+	}
+
+	contractsProviders = make([]StorageContractProviders, 0, len(addrs))
+	for _, a := range addrs {
+		addr, err := address.ParseAddr(a)
+		if err != nil {
+			log.Error("invalid address", slog.String("address", a), slog.String("error", err.Error()))
+			continue
+		}
+
+		info, coins, err := pContract.GetProvidersV1(ctx, api, block, addr)
+		if err != nil {
+			log.Error("get storage info", slog.String("address", a), slog.String("error", err.Error()))
+			continue
+		}
+
+		providers := make([]Provider, 0, len(addrs))
+		for _, p := range info {
+			providers = append(providers, Provider{
+				Key:           string(p.Key),
+				LastProofTime: p.LastProofAt,
+				RatePerMBDay:  p.RatePerMB.Nano().Uint64(),
+				MaxSpan:       p.MaxSpan,
+			})
+		}
+
+		if len(providers) == 0 {
+			log.Error("no providers found", slog.String("address", a))
+			continue
+		}
+
+		contractsProviders = append(contractsProviders, StorageContractProviders{
+			Address:   a,
+			Balance:   coins.Nano().Uint64(),
+			Providers: providers,
+		})
+	}
+
+	return
+}
+
 func parseTx(tx *tlb.Transaction) (res *Transaction, ok bool) {
+	var comment, srcAddr, dstAddr string
+	var op uint64
+	var createdAt int64
+
 	in := tx.IO.In
-	if in.MsgType != tlb.MsgTypeInternal {
-		return
-	}
+	switch in.MsgType {
+	case tlb.MsgTypeInternal:
+		{
+			var msg *tlb.InternalMessage
+			msg, ok = in.Msg.(*tlb.InternalMessage)
+			if !ok {
+				return
+			}
 
-	msg, ok := in.Msg.(*tlb.InternalMessage)
-	if !ok {
-		return
-	}
+			srcAddr = msg.SrcAddr.String()
+			dstAddr = msg.DstAddr.String()
+			createdAt = int64(msg.CreatedAt)
 
-	var comment string
-	if msg.Body != nil {
-		b := msg.Body.BeginParse()
-		comment, _ = b.LoadStringSnake()
+			if msg.Payload() != nil {
+				{
+					b := msg.Payload().BeginParse()
+					comment, _ = b.LoadStringSnake()
+				}
+				{
+					b := msg.Payload().BeginParse()
+					op, _ = b.LoadUInt(32)
+				}
+			}
+		}
+	default:
+		{
+			return
+		}
 	}
 
 	ok = true
 	res = &Transaction{
 		Hash:      tx.Hash,
 		LT:        tx.LT,
-		From:      msg.SrcAddr.String(),
+		Op:        op,
+		From:      srcAddr,
+		To:        dstAddr,
 		Message:   comment,
-		CreatedAt: time.Unix(int64(msg.CreatedAt), 0),
+		CreatedAt: time.Unix(createdAt, 0),
 	}
 
 	return
 }
 
-func NewClient(ctx context.Context, configUrl string) (Client, error) {
+func NewClient(ctx context.Context, configUrl string, logger *slog.Logger) (Client, error) {
 	clientPool := liteclient.NewConnectionPool()
 
 	err := clientPool.AddConnectionsFromConfigUrl(ctx, configUrl)
@@ -124,5 +238,6 @@ func NewClient(ctx context.Context, configUrl string) (Client, error) {
 
 	return &client{
 		clientPool: clientPool,
+		logger:     logger,
 	}, nil
 }

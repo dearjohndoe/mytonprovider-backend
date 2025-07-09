@@ -181,5 +181,20 @@ type ProviderDB struct {
 type ProviderWallet struct {
 	PubKey  string `db:"public_key"`
 	Address string `db:"address"`
-	LT      uint64 `db:"lt"`
+	LT      uint64 `db:"last_tx_lt"`
+}
+
+type ProviderWalletLT struct {
+	PubKey string `db:"public_key"`
+	LT     uint64 `db:"last_tx_lt"`
+}
+
+type StorageContract struct {
+	ProvidersAddresses map[string]struct{} `json:"providers_addresses"`
+	Address            string              `json:"address"`
+	BagID              string              `json:"bag_id"`
+	OwnerAddr          string              `json:"owner_address"`
+	Size               uint64              `json:"size"`
+	ChunkSize          uint64              `json:"chunk_size"`
+	LastLT             uint64              `json:"last_tx_lt"`
 }

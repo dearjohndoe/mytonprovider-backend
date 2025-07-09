@@ -99,7 +99,7 @@ func run() (err error) {
 	)
 
 	// TON
-	ton, err := tonclient.NewClient(context.Background(), config.TON.ConfigURL)
+	ton, err := tonclient.NewClient(context.Background(), config.TON.ConfigURL, logger)
 	if err != nil {
 		logger.Error("failed to create TON client", slog.String("error", err.Error()))
 		return

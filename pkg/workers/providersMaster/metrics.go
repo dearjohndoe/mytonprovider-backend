@@ -36,15 +36,15 @@ func (m *metricsMiddleware) UpdateKnownProviders(ctx context.Context) (interval 
 	return m.worker.UpdateKnownProviders(ctx)
 }
 
-func (m *metricsMiddleware) CollectProvidersNewContracts(ctx context.Context) (interval time.Duration, err error) {
+func (m *metricsMiddleware) CollectProvidersNewStorageContracts(ctx context.Context) (interval time.Duration, err error) {
 	defer func(s time.Time) {
 		labels := []string{
-			"CollectProvidersNewContracts", strconv.FormatBool(err != nil),
+			"CollectProvidersNewStorageContracts", strconv.FormatBool(err != nil),
 		}
 		m.reqCount.WithLabelValues(labels...).Add(1)
 		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
 	}(time.Now())
-	return m.worker.CollectProvidersNewContracts(ctx)
+	return m.worker.CollectProvidersNewStorageContracts(ctx)
 }
 
 func (m *metricsMiddleware) UpdateUptime(ctx context.Context) (interval time.Duration, err error) {
