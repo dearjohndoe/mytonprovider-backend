@@ -103,6 +103,7 @@ type TelemetryRequest struct {
 	CPUInfo          CPUInfo            `json:"cpu_info"`
 	Pings            map[string]float32 `json:"pings"`
 	Benchmark        interface{}        `json:"benchmark"`
+	XRealIP          string             `json:"x_real_ip"`
 }
 
 type DiskBenchmark struct {

@@ -113,6 +113,7 @@ type TelemetryUpdate struct {
 	MaxBagSizeBytes    uint64    `json:"max_bag_size_bytes" db:"max_bag_size_bytes"`
 	CPUNumber          int32     `json:"cpu_number" db:"cpu_number"`
 	CPUIsVirtual       bool      `json:"cpu_is_virtual" db:"cpu_is_virtual"`
+	TelemetryIP        string    `json:"x_real_ip" db:"x_real_ip"`
 }
 
 type TelemetryDB struct {

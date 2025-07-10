@@ -31,8 +31,8 @@ type Providers interface {
 	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error)
 	GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error)
 	GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error)
-	UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error)
-	UpdateBenchmarks(ctx context.Context, benchmark *v1.BenchmarksRequest) (err error)
+	UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest) (err error)
+	UpdateBenchmarks(ctx context.Context, benchmark v1.BenchmarksRequest) (err error)
 }
 
 func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error) {
@@ -91,8 +91,8 @@ func (s *service) GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersR
 	return
 }
 
-func (s *service) UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error) {
-	if telemetry == nil || telemetry.Storage.Provider.PubKey == "" {
+func (s *service) UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest) (err error) {
+	if telemetry.Storage.Provider.PubKey == "" {
 		return models.NewAppError(models.BadRequestErrorCode, "")
 	}
 
@@ -101,8 +101,8 @@ func (s *service) UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRe
 	return nil
 }
 
-func (s *service) UpdateBenchmarks(ctx context.Context, benchmark *v1.BenchmarksRequest) (err error) {
-	if benchmark == nil || benchmark.PubKey == "" {
+func (s *service) UpdateBenchmarks(ctx context.Context, benchmark v1.BenchmarksRequest) (err error) {
+	if benchmark.PubKey == "" {
 		return models.NewAppError(models.BadRequestErrorCode, "")
 	}
 

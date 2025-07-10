@@ -29,11 +29,16 @@ func (h *handler) authorizationMiddleware(c *fiber.Ctx) error {
 }
 
 func (h *handler) loggerMiddleware(c *fiber.Ctx) error {
+	headers := c.GetReqHeaders()
+	if _, ok := headers["Authorization"]; ok {
+		headers["Authorization"] = []string{"REDACTED"}
+	}
+
 	h.logger.Debug(
 		"request received",
 		"method", c.Method(),
 		"url", c.OriginalURL(),
-		"headers", c.GetReqHeaders(),
+		"headers", headers,
 		"body_length", len(c.Body()),
 	)
 

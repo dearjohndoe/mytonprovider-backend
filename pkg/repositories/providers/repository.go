@@ -239,7 +239,8 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			total_ram,
 			ram_usage_percent,
 			cpu_number,
-			cpu_is_virtual
+			cpu_is_virtual,
+			x_real_ip
 		)
 		SELECT 
 			lower(t->>'public_key'),
@@ -268,7 +269,8 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			(t->>'total_ram')::float4,
 			(t->>'ram_usage_percent')::float4,
 			(t->>'cpu_number')::int4,
-			(t->>'cpu_is_virtual')::boolean
+			(t->>'cpu_is_virtual')::boolean,
+			t->>'x_real_ip'
 		FROM jsonb_array_elements($1::jsonb) t
 		ON CONFLICT (public_key) DO UPDATE SET
 			storage_git_hash = EXCLUDED.storage_git_hash,
@@ -295,6 +297,7 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			ram_usage_percent = EXCLUDED.ram_usage_percent,
 			cpu_number = EXCLUDED.cpu_number,
 			cpu_is_virtual = EXCLUDED.cpu_is_virtual,
+			x_real_ip = EXCLUDED.x_real_ip,
 			updated_at = now()
 	`
 

@@ -54,7 +54,7 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 			continue
 		}
 
-		telemetryItem, ok := item.(*v1.TelemetryRequest)
+		telemetryItem, ok := item.(v1.TelemetryRequest)
 		if !ok {
 			continue
 		}
@@ -103,6 +103,7 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 			CPUIsVirtual:       telemetryItem.CPUInfo.IsVirtual,
 			MaxBagSizeBytes:    telemetryItem.Storage.Provider.MaxBagSizeBytes,
 			Pings:              pings,
+			TelemetryIP:        telemetryItem.XRealIP,
 		})
 	}
 

@@ -7,6 +7,7 @@ import (
 
 	"mytonprovider-backend/pkg/cache"
 	v1 "mytonprovider-backend/pkg/models/api/v1"
+	"mytonprovider-backend/pkg/utils"
 )
 
 const (
@@ -47,33 +48,48 @@ func (c *cacheMiddleware) GetLatestTelemetry(ctx context.Context) (providers []v
 
 	providers = make([]v1.TelemetryRequest, 0, len(data))
 	for _, v := range data {
-		if telemetry, ok := v.(*v1.TelemetryRequest); ok && telemetry != nil {
-			providers = append(providers, *telemetry)
+		if telemetry, ok := v.(v1.TelemetryRequest); ok {
+			telemetryCopy, copyErr := utils.DeepCopy(telemetry)
+			if copyErr != nil {
+				continue
+			}
+
+			providers = append(providers, telemetryCopy)
 		}
 	}
 
 	return
 }
 
-func (c *cacheMiddleware) UpdateTelemetry(ctx context.Context, telemetry *v1.TelemetryRequest) (err error) {
+func (c *cacheMiddleware) UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest) (err error) {
 	err = c.svc.UpdateTelemetry(ctx, telemetry)
 	if err != nil {
 		return
 	}
 
-	c.telemetryBuffer.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
-	c.latestTelemetryBuffer.Set(strings.ToLower(telemetry.Storage.Provider.PubKey), telemetry)
+	telemetryCopy, copyErr := utils.DeepCopy(telemetry)
+	if copyErr != nil {
+		telemetryCopy = telemetry
+	}
+
+	key := strings.ToLower(telemetry.Storage.Provider.PubKey)
+	c.telemetryBuffer.Set(key, telemetryCopy)
+	c.latestTelemetryBuffer.Set(key, telemetryCopy)
 
 	return
 }
 
-func (c *cacheMiddleware) UpdateBenchmarks(ctx context.Context, benchmark *v1.BenchmarksRequest) (err error) {
+func (c *cacheMiddleware) UpdateBenchmarks(ctx context.Context, benchmark v1.BenchmarksRequest) (err error) {
 	err = c.svc.UpdateBenchmarks(ctx, benchmark)
 	if err != nil {
 		return
 	}
 
-	c.benchmarksBuffer.Set(strings.ToLower(benchmark.PubKey), benchmark)
+	benchmarkCopy, copyErr := utils.DeepCopy(benchmark)
+	if copyErr != nil {
+		benchmarkCopy = benchmark
+	}
+	c.benchmarksBuffer.Set(strings.ToLower(benchmark.PubKey), benchmarkCopy)
 
 	return
 }
