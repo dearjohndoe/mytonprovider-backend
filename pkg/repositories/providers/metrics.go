@@ -82,6 +82,28 @@ func (m *metricsMiddleware) AddStatuses(ctx context.Context, providers []db.Prov
 	return m.repo.AddStatuses(ctx, providers)
 }
 
+func (m *metricsMiddleware) UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"UpdateContractProofsChecks", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.UpdateContractProofsChecks(ctx, contractsProofs)
+}
+
+func (m *metricsMiddleware) UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"UpdateProvidersIPs", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.UpdateProvidersIPs(ctx, ips)
+}
+
 func (m *metricsMiddleware) UpdateUptime(ctx context.Context) (err error) {
 	defer func(s time.Time) {
 		labels := []string{
@@ -146,6 +168,17 @@ func (m *metricsMiddleware) AddStorageContracts(ctx context.Context, contracts [
 		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
 	}(time.Now())
 	return m.repo.AddStorageContracts(ctx, contracts)
+}
+
+func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"GetStorageContracts", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.GetStorageContracts(ctx)
 }
 
 func (m *metricsMiddleware) UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error) {

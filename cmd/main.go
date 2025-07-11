@@ -105,7 +105,7 @@ func run() (err error) {
 		return
 	}
 
-	providerClient, err := newProviderClient(context.Background(), config.TON.ConfigURL, config.System.ADNLPort, config.System.Key)
+	dhtClient, providerClient, err := newProviderClient(context.Background(), config.TON.ConfigURL, config.System.ADNLPort, config.System.Key)
 	if err != nil {
 		logger.Error("failed to create provider client", slog.String("error", err.Error()))
 		return
@@ -134,6 +134,7 @@ func run() (err error) {
 		systemRepo,
 		ton,
 		providerClient,
+		dhtClient,
 		config.TON.MasterAddress,
 		config.TON.BatchSize,
 		logger,

@@ -2,6 +2,7 @@ package providersmaster
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/xssnick/tonutils-go/address"
+	"github.com/xssnick/tonutils-go/adnl/dht"
 	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 
 	"mytonprovider-backend/pkg/models/db"
@@ -30,9 +33,12 @@ type providers interface {
 	GetAllProvidersWallets(ctx context.Context) (wallets []db.ProviderWallet, err error)
 	UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error)
 	AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error)
+	GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
+	UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP) (err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
+	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
 	UpdateUptime(ctx context.Context) (err error)
 	UpdateRating(ctx context.Context) (err error)
 }
@@ -53,6 +59,7 @@ type providersMasterWorker struct {
 	system         system
 	ton            ton
 	providerClient *transport.Client
+	dhtClient      *dht.Client
 	masterAddr     string
 	batchSize      uint32
 	logger         *slog.Logger
@@ -62,6 +69,7 @@ type Worker interface {
 	CollectNewProviders(ctx context.Context) (interval time.Duration, err error)
 	UpdateKnownProviders(ctx context.Context) (interval time.Duration, err error)
 	CollectProvidersNewStorageContracts(ctx context.Context) (interval time.Duration, err error)
+	StoreProof(ctx context.Context) (interval time.Duration, err error)
 	UpdateUptime(ctx context.Context) (interval time.Duration, err error)
 	UpdateRating(ctx context.Context) (interval time.Duration, err error)
 }
@@ -255,7 +263,7 @@ func (w *providersMasterWorker) UpdateKnownProviders(ctx context.Context) (inter
 
 func (w *providersMasterWorker) CollectProvidersNewStorageContracts(ctx context.Context) (interval time.Duration, err error) {
 	const (
-		successInterval = 30 * time.Minute
+		successInterval = 60 * time.Minute
 		failureInterval = 15 * time.Second
 	)
 
@@ -337,19 +345,20 @@ func (w *providersMasterWorker) CollectProvidersNewStorageContracts(ctx context.
 
 	newContracts := make([]db.StorageContract, 0, len(contractsInfo))
 	for _, contract := range contractsInfo {
-		if _, ok := storageContracts[contract.Address]; !ok {
+		sc, ok := storageContracts[contract.Address]
+		if !ok {
 			log.Error("storage contract not found in scanned transactions", "address", contract.Address)
 			continue
 		}
 
 		newContracts = append(newContracts, db.StorageContract{
-			ProvidersAddresses: storageContracts[contract.Address].ProvidersAddresses,
+			ProvidersAddresses: sc.ProvidersAddresses,
 			Address:            contract.Address,
 			BagID:              contract.BagID,
 			OwnerAddr:          contract.OwnerAddr,
 			Size:               contract.Size,
 			ChunkSize:          contract.ChunkSize,
-			LastLT:             storageContracts[contract.Address].LastLT,
+			LastLT:             sc.LastLT,
 		})
 
 		if contract.Size == 0 || contract.ChunkSize == 0 {
@@ -372,6 +381,143 @@ func (w *providersMasterWorker) CollectProvidersNewStorageContracts(ctx context.
 		interval = failureInterval
 		return
 	}
+
+	log.Info("successfully collected new storage contracts", "count", len(newContracts))
+
+	return
+}
+
+func (w *providersMasterWorker) StoreProof(ctx context.Context) (interval time.Duration, err error) {
+	const (
+		successInterval = 60 * time.Minute
+		failureInterval = 15 * time.Second
+	)
+
+	log := w.logger.With(slog.String("worker", "StoreProof"))
+	log.Debug("checking storage proofs")
+
+	interval = successInterval
+
+	storageContracts, err := w.providers.GetStorageContracts(ctx)
+	if err != nil {
+		log.Error("failed to get storage contracts", "error", err)
+		interval = failureInterval
+
+		return
+	}
+
+	providersIPs := make(map[string]db.ProviderIP, len(storageContracts))
+	for _, sc := range storageContracts {
+		if _, ok := providersIPs[sc.ProviderPublicKey]; ok {
+			continue
+		}
+
+		addr, aErr := address.ParseAddr(sc.Address)
+		if aErr != nil {
+			log.Error("failed to parse address", "address", sc.Address, "error", aErr)
+			continue
+		}
+
+		hashBytes, _ := hex.DecodeString(sc.ProviderPublicKey)
+		proof, vErr := w.providerClient.VerifyStorageADNLProof(ctx, hashBytes, addr)
+		if vErr != nil {
+			log.Error("failed to verify storage proof", "provider", sc.ProviderPublicKey, "error", vErr)
+			providersIPs[sc.ProviderPublicKey] = db.ProviderIP{
+				PublicKey: sc.ProviderPublicKey,
+				IP:        "",
+				Port:      0,
+			}
+			continue
+		}
+
+		l, _, dErr := w.dhtClient.FindAddresses(ctx, proof)
+		if dErr != nil {
+			log.Error("failed to find provider addresses", "provider", sc.ProviderPublicKey, "error", dErr)
+			providersIPs[sc.ProviderPublicKey] = db.ProviderIP{
+				PublicKey: sc.ProviderPublicKey,
+				IP:        "",
+				Port:      0,
+			}
+			continue
+		}
+
+		if l == nil {
+			continue
+		}
+
+		providersIPs[sc.ProviderPublicKey] = db.ProviderIP{
+			PublicKey: sc.ProviderPublicKey,
+			IP:        l.Addresses[0].IP.String(),
+			Port:      l.Addresses[0].Port,
+		}
+	}
+
+	ips := make([]db.ProviderIP, 0, len(providersIPs))
+	for _, p := range providersIPs {
+		ips = append(ips, p)
+	}
+	err = w.providers.UpdateProvidersIPs(ctx, ips)
+	if err != nil {
+		log.Error("failed to add providers IPs", "error", err)
+		interval = failureInterval
+		return
+	}
+
+	contractProofsChecks := make([]db.ContractProofsCheck, 0, len(storageContracts))
+	for _, sc := range storageContracts {
+		// TODO: go routine batch
+		reason := func() (reasonErr uint32) {
+			addr, aErr := address.ParseAddr(sc.Address)
+			if aErr != nil {
+				log.Error("failed to parse address", "address", sc.Address, "error", aErr)
+				reasonErr = 1 // "invalid address"
+				return
+			}
+
+			prv, err := hex.DecodeString(sc.ProviderPublicKey)
+			if err != nil || len(prv) != 32 {
+				log.Error("failed to decode provider public key", "provider", sc.ProviderPublicKey, "error", err)
+				reasonErr = 2 // "invalid provider public key"
+				return
+			}
+
+			n, _ := rand.Int(rand.Reader, big.NewInt(int64(sc.Size)))
+			toProof := n.Uint64()
+
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+			stResp, err := w.providerClient.RequestStorageInfo(ctx, prv, addr, toProof)
+			cancel()
+			if err != nil {
+				log.Error("failed to request storage info", "provider", sc.ProviderPublicKey, "error", err)
+				reasonErr = 500 // "failed to request storage info"
+				return
+			}
+
+			if stResp == nil || len(stResp.Proof) == 0 {
+				log.Error("invalid storage proof response", "provider", sc.ProviderPublicKey, "response", stResp)
+				reasonErr = 3 // "invalid storage proof response"
+				return
+			}
+
+			return 0
+		}()
+
+		contractProofsChecks = append(contractProofsChecks, db.ContractProofsCheck{
+			Address:         sc.Address,
+			ProviderAddress: sc.ProviderAddress,
+			Reason:          reason,
+			Timestamp:       time.Now(),
+		})
+	}
+
+	err = w.providers.UpdateContractProofsChecks(ctx, contractProofsChecks)
+	if err != nil {
+		log.Error("failed to update contract proofs checks", "error", err)
+		interval = failureInterval
+		return
+	}
+
+	log.Info("successfully updated contract proofs checks", "count", len(contractProofsChecks))
 
 	return
 }
@@ -460,6 +606,7 @@ func NewWorker(
 	system system,
 	ton ton,
 	providerClient *transport.Client,
+	dhtClient *dht.Client,
 	masterAddr string,
 	batchSize uint32,
 	logger *slog.Logger,
@@ -469,6 +616,7 @@ func NewWorker(
 		system:         system,
 		ton:            ton,
 		providerClient: providerClient,
+		dhtClient:      dhtClient,
 		masterAddr:     masterAddr,
 		batchSize:      batchSize,
 		logger:         logger,

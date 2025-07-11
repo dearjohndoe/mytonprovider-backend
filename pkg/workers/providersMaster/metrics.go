@@ -47,6 +47,17 @@ func (m *metricsMiddleware) CollectProvidersNewStorageContracts(ctx context.Cont
 	return m.worker.CollectProvidersNewStorageContracts(ctx)
 }
 
+func (m *metricsMiddleware) StoreProof(ctx context.Context) (interval time.Duration, err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"StoreProof", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.worker.StoreProof(ctx)
+}
+
 func (m *metricsMiddleware) UpdateUptime(ctx context.Context) (interval time.Duration, err error) {
 	defer func(s time.Time) {
 		labels := []string{

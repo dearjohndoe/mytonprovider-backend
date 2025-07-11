@@ -85,7 +85,7 @@ func newPostgresConfig(config *Config, logger *slog.Logger) (dbConfig *pgxpool.C
 	return
 }
 
-func newProviderClient(ctx context.Context, configURL, ADNLPort string, privateKey ed25519.PrivateKey) (tc *transport.Client, err error) {
+func newProviderClient(ctx context.Context, configURL, ADNLPort string, privateKey ed25519.PrivateKey) (dc *dht.Client, tc *transport.Client, err error) {
 	lsCfg, err := liteclient.GetConfigFromUrl(ctx, configURL)
 	if err != nil {
 		err = fmt.Errorf("failed to get liteclient config: %w", err)
@@ -112,7 +112,7 @@ func newProviderClient(ctx context.Context, configURL, ADNLPort string, privateK
 		return
 	}
 
-	dhtClient, err := dht.NewClientFromConfig(dhtGate, lsCfg)
+	dc, err = dht.NewClientFromConfig(dhtGate, lsCfg)
 	if err != nil {
 		err = fmt.Errorf("failed to create DHT client: %w", err)
 		return
@@ -124,7 +124,7 @@ func newProviderClient(ctx context.Context, configURL, ADNLPort string, privateK
 		return
 	}
 
-	tc = transport.NewClient(gateProvider, dhtClient)
+	tc = transport.NewClient(gateProvider, dc)
 
 	return
 }

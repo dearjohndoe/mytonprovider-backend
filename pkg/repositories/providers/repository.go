@@ -21,11 +21,14 @@ type Repository interface {
 	UpdateTelemetry(ctx context.Context, telemetry []db.TelemetryUpdate) (err error)
 	UpdateBenchmarks(ctx context.Context, benchmarks []db.BenchmarkUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
+	UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP) (err error)
 	UpdateUptime(ctx context.Context) (err error)
 	UpdateRating(ctx context.Context) (err error)
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
 	GetAllProvidersWallets(ctx context.Context) (wallets []db.ProviderWallet, err error)
 	AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error)
+	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
+	GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error)
 	UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
@@ -378,6 +381,39 @@ func (r *repository) AddStatuses(ctx context.Context, providers []db.ProviderSta
 	return
 }
 
+func (r *repository) UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP) (err error) {
+	if len(ips) == 0 {
+		return
+	}
+
+	query := `
+		UPDATE providers.providers p
+		SET
+			ip = COALESCE(p.ip, i.ip),
+			port = i.port
+		FROM (
+
+			SELECT
+				lower(i->>'public_key') AS public_key,
+				i->>'ip' AS ip,
+				(i->>'port')::int AS port
+		FROM jsonb_array_elements($1::jsonb) AS i
+		) AS i
+		WHERE p.public_key = i.public_key
+	`
+	_, err = r.db.Exec(ctx, query, ips)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = nil
+			return
+		}
+
+		return fmt.Errorf("failed to update providers IPs: %w", err)
+	}
+
+	return nil
+}
+
 func (r *repository) UpdateUptime(ctx context.Context) (err error) {
 	query := `
 		WITH provider_uptime AS (
@@ -524,30 +560,102 @@ func (r *repository) AddStorageContracts(ctx context.Context, contracts []db.Sto
 	}
 
 	query := `
+		WITH cte AS (
+			SELECT 
+				c->>'address' AS address,
+        		ARRAY(SELECT jsonb_object_keys(c->'providers_addresses'))::text[] AS providers_addresses,
+				c->>'bag_id' AS bag_id,
+				c->>'owner_address' AS owner_address,
+				(c->>'size')::bigint AS size,
+				(c->>'chunk_size')::bigint AS chunk_size,
+				(c->>'last_tx_lt')::bigint AS last_tx_lt
+			FROM jsonb_array_elements($1::jsonb) AS c
+		)
 		INSERT INTO providers.storage_contracts (
 			address,
-			providers_addresses,
+			provider_address,
 			bag_id,
 			owner_address,
 			size,
 			chunk_size,
 			last_tx_lt
 		)
-		SELECT 
-			c->>'address',
-			ARRAY(SELECT jsonb_object_keys(c->'providers_addresses'))::text[],
-			c->>'bag_id',
-			c->>'owner_address',
-			(c->>'size')::bigint,
-			(c->>'chunk_size')::bigint,
-			(c->>'last_tx_lt')::bigint
-		FROM jsonb_array_elements($1::jsonb) AS c
-		ON CONFLICT (address) DO UPDATE SET
-			last_tx_lt = EXCLUDED.last_tx_lt,
-			providers_addresses = EXCLUDED.providers_addresses
+		SELECT
+			address,
+			unnest(providers_addresses),
+			bag_id,
+			owner_address,
+			size,
+			chunk_size,
+			last_tx_lt
+		FROM cte
+		ON CONFLICT (address, provider_address) DO UPDATE SET
+			last_tx_lt = EXCLUDED.last_tx_lt
 	`
 
 	_, err = r.db.Exec(ctx, query, contracts)
+
+	return
+}
+
+func (r *repository) UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error) {
+	query := `
+		WITH cte AS (
+			SELECT
+				c->>'address' AS address,
+				c->>'provider_address' AS provider_address,
+				(c->>'reason')::integer AS reason,
+				(c->>'timestamp')::timestamptz AS timestamp
+			FROM jsonb_array_elements($1::jsonb) AS c
+		)
+		UPDATE providers.storage_contracts sc
+		SET
+			reason = c.reason,
+			reason_timestamp = c.timestamp
+		FROM cte c
+		WHERE sc.address = c.address AND c.provider_address = sc.provider_address
+	`
+
+	_, err = r.db.Exec(ctx, query, contractsProofs)
+
+	return
+}
+
+func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error) {
+	query := `
+		SELECT 
+			p.public_key as provider_public_key,
+			sc.provider_address,
+			sc.address,
+			sc.size
+		FROM providers.storage_contracts sc
+			JOIN providers.providers p ON p.address = sc.provider_address
+	`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = nil
+			return
+		}
+
+		return
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		var contract db.StorageContractShort
+		if rErr := rows.Scan(&contract.ProviderPublicKey, &contract.ProviderAddress, &contract.Address, &contract.Size); rErr != nil {
+			err = rErr
+			return
+		}
+		contracts = append(contracts, contract)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return
+	}
 
 	return
 }

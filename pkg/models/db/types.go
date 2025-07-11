@@ -190,6 +190,13 @@ type ProviderWalletLT struct {
 	LT     uint64 `db:"last_tx_lt"`
 }
 
+type StorageContractShort struct {
+	ProviderPublicKey string
+	ProviderAddress   string
+	Address           string
+	Size              uint64
+}
+
 type StorageContract struct {
 	ProvidersAddresses map[string]struct{} `json:"providers_addresses"`
 	Address            string              `json:"address"`
@@ -198,4 +205,17 @@ type StorageContract struct {
 	Size               uint64              `json:"size"`
 	ChunkSize          uint64              `json:"chunk_size"`
 	LastLT             uint64              `json:"last_tx_lt"`
+}
+
+type ProviderIP struct {
+	PublicKey string `json:"public_key"`
+	IP        string `json:"ip"`
+	Port      int32  `json:"port"`
+}
+
+type ContractProofsCheck struct {
+	Address         string    `json:"address"`
+	ProviderAddress string    `json:"provider_address"`
+	Reason          uint32    `json:"reason"`
+	Timestamp       time.Time `json:"timestamp"`
 }
