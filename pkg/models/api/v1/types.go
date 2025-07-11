@@ -234,6 +234,7 @@ type Telemetry struct {
 
 type Provider struct {
 	PubKey      string  `json:"pubkey"`
+	Address     string  `json:"address"`
 	UpTime      float32 `json:"uptime"`
 	WorkingTime uint64  `json:"working_time"`
 	Rating      float32 `json:"rating"`

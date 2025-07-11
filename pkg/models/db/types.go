@@ -167,6 +167,7 @@ type FiltersRange struct {
 
 type ProviderDB struct {
 	PubKey  string  `json:"public_key"`
+	Address string  `json:"address"`
 	UpTime  float32 `json:"uptime"`
 	Rating  float32 `json:"rating"`
 	MaxSpan uint32  `json:"max_span"`

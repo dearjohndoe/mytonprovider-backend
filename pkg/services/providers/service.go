@@ -157,6 +157,7 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 
 		providers = append(providers, v1.Provider{
 			PubKey:          provider.PubKey,
+			Address:         provider.Address,
 			UpTime:          provider.UpTime,
 			WorkingTime:     workingTime,
 			Rating:          provider.Rating,

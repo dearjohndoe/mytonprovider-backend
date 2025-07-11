@@ -43,6 +43,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 	query := `
 		SELECT 
 			p.public_key,
+			p.address,
 			COALESCE(p.uptime, 0) * 100 as uptime,
 			COALESCE(p.rating, 0) as rating,
 			p.max_span,
@@ -50,7 +51,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			p.min_span,
 			p.max_bag_size_bytes,
 			p.registered_at,
-			coalCOALESCEesce(p.is_send_telemetry, false) as is_send_telemetry,
+			t.public_key is not null as is_send_telemetry,
 			t.storage_git_hash,
 			t.provider_git_hash,
 			t.total_provider_space,
@@ -207,7 +208,6 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 		WITH upd_providers AS (
 			UPDATE providers.providers p
 			SET
-				is_send_telemetry = true,
 				max_bag_size_bytes = t.max_bag_size_bytes
 			FROM (
 				SELECT 

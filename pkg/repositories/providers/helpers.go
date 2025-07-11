@@ -13,6 +13,7 @@ const (
 	providersQuerySelect = `
 		SELECT 
 			p.public_key,
+			p.address,
 			p.uptime * 100 as uptime,
 			p.rating,
 			p.max_span,
@@ -20,7 +21,7 @@ const (
 			p.min_span,
 			p.max_bag_size_bytes,
 			p.registered_at,
-			COALESCE(p.is_send_telemetry, false) as is_send_telemetry,
+			t.public_key is not null as is_send_telemetry,
 			t.storage_git_hash,
 			t.provider_git_hash,
 			t.total_provider_space,
@@ -126,9 +127,9 @@ func filtersToCondition(filters db.ProviderFilters, args []any) (condition strin
 	}
 	if filters.IsSendTelemetry != nil {
 		if *filters.IsSendTelemetry {
-			condition += " AND p.is_send_telemetry"
+			condition += " AND t.public_key is not null"
 		} else {
-			condition += " AND (p.is_send_telemetry IS NULL OR NOT p.is_send_telemetry)"
+			condition += " AND t.public_key is null"
 		}
 	}
 	if filters.TotalProviderSpaceGt != nil {
@@ -229,6 +230,7 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 		var provider db.ProviderDB
 		if err := rows.Scan(
 			&provider.PubKey,
+			&provider.Address,
 			&provider.UpTime,
 			&provider.Rating,
 			&provider.MaxSpan,
