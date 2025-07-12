@@ -45,6 +45,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 		SELECT 
 			p.public_key,
 			p.address,
+			p.status,
 			COALESCE(p.uptime, 0) * 100 as uptime,
 			COALESCE(p.rating, 0) as rating,
 			p.max_span,

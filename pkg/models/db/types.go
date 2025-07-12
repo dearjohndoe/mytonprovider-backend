@@ -166,6 +166,7 @@ type FiltersRange struct {
 }
 
 type ProviderDB struct {
+	Status  *uint32 `json:"status"`
 	PubKey  string  `json:"public_key"`
 	Address string  `json:"address"`
 	UpTime  float32 `json:"uptime"`

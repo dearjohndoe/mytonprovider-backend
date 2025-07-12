@@ -14,6 +14,7 @@ const (
 		SELECT 
 			p.public_key,
 			p.address,
+			p.status,
 			p.uptime * 100 as uptime,
 			p.rating,
 			p.max_span,
@@ -231,6 +232,7 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 		if err := rows.Scan(
 			&provider.PubKey,
 			&provider.Address,
+			&provider.Status,
 			&provider.UpTime,
 			&provider.Rating,
 			&provider.MaxSpan,
