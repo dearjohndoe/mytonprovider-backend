@@ -39,6 +39,7 @@ type providers interface {
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddStatuses(ctx context.Context, providers []db.ProviderStatusUpdate) (err error)
 	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
+	UpdateStatuses(ctx context.Context) (err error)
 	UpdateUptime(ctx context.Context) (err error)
 	UpdateRating(ctx context.Context) (err error)
 }
@@ -476,7 +477,7 @@ func (w *providersMasterWorker) StoreProof(ctx context.Context) (interval time.D
 
 			prv, err := hex.DecodeString(sc.ProviderPublicKey)
 			if err != nil || len(prv) != 32 {
-				log.Error("failed to decode provider public key", "provider", sc.ProviderPublicKey, "error", err)
+				log.Error("failed to decode provider public key", "provider", sc.ProviderPublicKey, "address", sc.Address, "error", err)
 				reasonErr = 2 // "invalid provider public key"
 				return
 			}
@@ -488,13 +489,13 @@ func (w *providersMasterWorker) StoreProof(ctx context.Context) (interval time.D
 			stResp, err := w.providerClient.RequestStorageInfo(ctx, prv, addr, toProof)
 			cancel()
 			if err != nil {
-				log.Error("failed to request storage info", "provider", sc.ProviderPublicKey, "error", err)
+				log.Error("failed to request storage info", "provider", sc.ProviderPublicKey, "address", sc.Address, "error", err)
 				reasonErr = 500 // "failed to request storage info"
 				return
 			}
 
 			if stResp == nil || len(stResp.Proof) == 0 {
-				log.Error("invalid storage proof response", "provider", sc.ProviderPublicKey, "response", stResp)
+				log.Error("invalid storage proof response", "provider", sc.ProviderPublicKey, "address", sc.Address, "response", stResp)
 				reasonErr = 3 // "invalid storage proof response"
 				return
 			}
@@ -518,6 +519,12 @@ func (w *providersMasterWorker) StoreProof(ctx context.Context) (interval time.D
 	}
 
 	log.Info("successfully updated contract proofs checks", "count", len(contractProofsChecks))
+
+	err = w.providers.UpdateStatuses(ctx)
+	if err != nil {
+		log.Error("failed to update provider statuses", "error", err)
+		return
+	}
 
 	return
 }

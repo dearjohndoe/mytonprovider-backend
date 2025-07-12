@@ -170,6 +170,17 @@ func (m *metricsMiddleware) AddStorageContracts(ctx context.Context, contracts [
 	return m.repo.AddStorageContracts(ctx, contracts)
 }
 
+func (m *metricsMiddleware) UpdateStatuses(ctx context.Context) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"UpdateStatuses", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.UpdateStatuses(ctx)
+}
+
 func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error) {
 	defer func(s time.Time) {
 		labels := []string{

@@ -27,6 +27,7 @@ type Repository interface {
 	GetAllProvidersPubkeys(ctx context.Context) (pubkeys []string, err error)
 	GetAllProvidersWallets(ctx context.Context) (wallets []db.ProviderWallet, err error)
 	AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error)
+	UpdateStatuses(ctx context.Context) (err error)
 	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
 	GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error)
 	UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error)
@@ -594,6 +595,39 @@ func (r *repository) AddStorageContracts(ctx context.Context, contracts []db.Sto
 	`
 
 	_, err = r.db.Exec(ctx, query, contracts)
+
+	return
+}
+
+func (r *repository) UpdateStatuses(ctx context.Context) (err error) {
+	query := `
+		UPDATE providers.providers p 
+		SET status = selected_reasons.reason
+		FROM (
+			WITH collect_statuses AS (
+				SELECT 
+					p.address, 
+					sc.reason, 
+					count(*) as cnt,
+					ROW_NUMBER() OVER (
+						PARTITION BY p.address 
+						ORDER BY count(*) DESC, 
+								CASE WHEN sc.reason IS NULL THEN 1 ELSE 0 END ASC
+					) as rn
+				FROM providers.providers p
+					LEFT JOIN providers.storage_contracts sc ON p.address = sc.provider_address
+				-- get only the most recent reason for each address
+				WHERE sc.reason IS NOT NULL AND sc.reason_timestamp > NOW() - INTERVAL '24 hours'
+				GROUP BY p.address, sc.reason
+			)
+			SELECT address, reason
+			FROM collect_statuses
+			WHERE rn = 1
+		) selected_reasons
+		WHERE p.address = selected_reasons.address;
+	`
+
+	_, err = r.db.Exec(ctx, query)
 
 	return
 }
