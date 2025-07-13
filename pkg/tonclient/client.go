@@ -17,7 +17,7 @@ import (
 const (
 	tspPrefix          = "tsp-"
 	retries            = 20
-	batch              = 30
+	batch              = 100
 	singleQueryTimeout = 5 * time.Second
 )
 
@@ -33,8 +33,9 @@ type Client interface {
 }
 
 // GetTransactions return all transactions between lastProcessedLT transaction and actual last transaction (both included)
-// Not ordered by LT or other fileds.
+// Not ordered by LT or other fileds, it gets them by batches from lastProcessedLT and newest(or deadline exceeded)
 func (c *client) GetTransactions(ctx context.Context, addr string, lastProcessedLT uint64) (txs []*Transaction, err error) {
+	log := c.logger.With("method", "GetTransactions")
 	api := ton.NewAPIClient(c.clientPool).WithTimeout(singleQueryTimeout).WithRetry(retries)
 	a, _ := address.ParseAddr(addr)
 	block, err := api.GetMasterchainInfo(ctx)
@@ -56,6 +57,19 @@ list:
 		res, errTx := api.ListTransactions(ctx, a, batch, lastLT, lastHash)
 		if errTx != nil {
 			if errors.Is(errTx, ton.ErrNoTransactionsWereFound) && (len(transactions) > 0) {
+				break
+			}
+
+			if errors.Is(errTx, context.DeadlineExceeded) {
+				// No need to collect all transactions, if deadline, then we have enough
+				// We collect more next time
+				log.Info("just got deadline exceeded, stopping transaction collection", "collected", len(transactions), "lastLT", lastLT)
+				break
+			}
+
+			v, ok := errTx.(ton.LSError)
+			if ok && v.Code == -400 {
+				log.Info("just got -400 error, stopping transaction collection", "collected", len(transactions), "addr", addr, "lastLT", lastLT)
 				break
 			}
 
