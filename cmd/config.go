@@ -45,19 +45,11 @@ type Postgress struct {
 	Name     string `env:"DB_NAME" required:"true"`
 }
 
-type TONStorage struct {
-	Password string `env:"TON_STORAGE_PASSWORD" required:"true"`
-	Username string `env:"TON_STORAGE_USERNAME" required:"true"`
-	Host     string `env:"TON_STORAGE_HOST" required:"true"`
-	Port     string `env:"TON_STORAGE_PORT" required:"true"`
-}
-
 type Config struct {
-	System     System
-	Metrics    Metrics
-	TON        TON
-	DB         Postgress
-	TONStorage TONStorage
+	System  System
+	Metrics Metrics
+	TON     TON
+	DB      Postgress
 }
 
 func loadConfig() *Config {
@@ -73,9 +65,6 @@ func loadConfig() *Config {
 	}
 	if err := env.Parse(&cfg.TON); err != nil {
 		log.Fatalf("Failed to parse TON config: %v", err)
-	}
-	if err := env.Parse(&cfg.TONStorage); err != nil {
-		log.Fatalf("Failed to parse storage config: %v", err)
 	}
 
 	if cfg.System.Key == nil {
