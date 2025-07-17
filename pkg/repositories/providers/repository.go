@@ -30,6 +30,7 @@ type Repository interface {
 	UpdateStatuses(ctx context.Context) (err error)
 	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
 	GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error)
+	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error)
 	UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
@@ -391,10 +392,9 @@ func (r *repository) UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP
 	query := `
 		UPDATE providers.providers p
 		SET
-			ip = COALESCE(p.ip, i.ip),
+			ip = i.ip,
 			port = i.port
 		FROM (
-
 			SELECT
 				lower(i->>'public_key') AS public_key,
 				i->>'ip' AS ip,
@@ -691,6 +691,28 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.St
 	if err != nil {
 		return
 	}
+
+	return
+}
+
+func (r *repository) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error) {
+	if len(storageContracts) == 0 {
+		return
+	}
+
+	query := `
+		WITH to_delete AS (
+			SELECT
+				c->>'address' AS address,
+				c->>'provider_address' AS provider_address
+			FROM jsonb_array_elements($1::jsonb) AS c
+		)
+		DELETE FROM providers.storage_contracts sc
+		USING to_delete
+		WHERE sc.address = to_delete.address AND sc.provider_address = to_delete.provider_address
+		`
+
+	_, err = r.db.Exec(ctx, query, storageContracts)
 
 	return
 }

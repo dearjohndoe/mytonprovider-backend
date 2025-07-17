@@ -192,6 +192,17 @@ func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts 
 	return m.repo.GetStorageContracts(ctx)
 }
 
+func (m *metricsMiddleware) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"UpdateRejectedStorageContracts", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.UpdateRejectedStorageContracts(ctx, storageContracts)
+}
+
 func (m *metricsMiddleware) UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error) {
 	defer func(s time.Time) {
 		labels := []string{

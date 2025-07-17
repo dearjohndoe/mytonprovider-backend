@@ -12,13 +12,16 @@ import (
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-go/ton"
 	pContract "github.com/xssnick/tonutils-storage-provider/pkg/contract"
+
+	"mytonprovider-backend/pkg/utils"
 )
 
 const (
-	tspPrefix          = "tsp-"
-	retries            = 20
-	batch              = 100
-	singleQueryTimeout = 5 * time.Second
+	tspPrefix           = "tsp-"
+	getProvidersRetries = 5
+	retries             = 20
+	batch               = 100
+	singleQueryTimeout  = 5 * time.Second
 )
 
 type client struct {
@@ -104,6 +107,7 @@ list:
 	return
 }
 
+// GetStorageContractsInfo interacts with storage contracts to get their info
 func (c *client) GetStorageContractsInfo(ctx context.Context, addrs []string) (contracts []StorageContract, err error) {
 	log := c.logger.With("method", "GetStorageContractsInfo")
 	api := ton.NewAPIClient(c.clientPool).WithTimeout(singleQueryTimeout).WithRetry(retries)
@@ -161,13 +165,19 @@ func (c *client) GetProvidersInfo(ctx context.Context, addrs []string) (contract
 			continue
 		}
 
-		info, coins, err := pContract.GetProvidersV1(ctx, api, block, addr)
+		var info []pContract.ProviderDataV1
+		var coins tlb.Coins
+		err = utils.TryNTimes(func() error {
+			var cErr error
+			info, coins, cErr = pContract.GetProvidersV1(ctx, api, block, addr)
+			return cErr
+		}, getProvidersRetries)
 		if err != nil {
-			log.Error("get storage info", slog.String("address", a), slog.String("error", err.Error()))
+			log.Error("get providers info", slog.String("address", a), slog.String("error", err.Error()))
 			continue
 		}
 
-		providers := make([]Provider, 0, len(addrs))
+		providers := make([]Provider, 0, len(info))
 		for _, p := range info {
 			providers = append(providers, Provider{
 				Key:           string(p.Key),
@@ -178,7 +188,6 @@ func (c *client) GetProvidersInfo(ctx context.Context, addrs []string) (contract
 		}
 
 		if len(providers) == 0 {
-			log.Error("no providers found", slog.String("address", a))
 			continue
 		}
 

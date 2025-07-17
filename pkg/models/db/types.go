@@ -193,10 +193,10 @@ type ProviderWalletLT struct {
 }
 
 type StorageContractShort struct {
-	ProviderPublicKey string
-	ProviderAddress   string
-	Address           string
-	Size              uint64
+	ProviderPublicKey string `json:"provider_public_key"`
+	ProviderAddress   string `json:"provider_address"`
+	Address           string `json:"address"`
+	Size              uint64 `json:"size"`
 }
 
 type StorageContract struct {
