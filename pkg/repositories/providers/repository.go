@@ -47,6 +47,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			p.public_key,
 			p.address,
 			p.status,
+			p.status_ratio,
 			COALESCE(p.uptime, 0) * 100 as uptime,
 			COALESCE(p.rating, 0) as rating,
 			p.max_span,
@@ -603,17 +604,18 @@ func (r *repository) AddStorageContracts(ctx context.Context, contracts []db.Sto
 func (r *repository) UpdateStatuses(ctx context.Context) (err error) {
 	query := `
 		UPDATE providers.providers p 
-		SET status = selected_reasons.reason
+		SET status = selected_reasons.reason,
+			status_ratio = selected_reasons.ratio
 		FROM (
 			WITH collect_statuses AS (
 				SELECT 
 					p.address, 
 					sc.reason, 
 					count(*) as cnt,
+					SUM(count(*)) OVER (PARTITION BY p.address) as total_cnt,
 					ROW_NUMBER() OVER (
 						PARTITION BY p.address 
-						ORDER BY count(*) DESC, 
-								CASE WHEN sc.reason IS NULL THEN 1 ELSE 0 END ASC
+						ORDER BY count(*) DESC, CASE WHEN sc.reason IS NULL THEN 1 ELSE 0 END ASC
 					) as rn
 				FROM providers.providers p
 					LEFT JOIN providers.storage_contracts sc ON p.address = sc.provider_address
@@ -621,7 +623,10 @@ func (r *repository) UpdateStatuses(ctx context.Context) (err error) {
 				WHERE sc.reason IS NOT NULL AND sc.reason_timestamp > NOW() - INTERVAL '24 hours'
 				GROUP BY p.address, sc.reason
 			)
-			SELECT address, reason
+			SELECT 
+				address, 
+				reason,
+				ROUND(cnt::numeric / total_cnt::numeric, 4) as ratio
 			FROM collect_statuses
 			WHERE rn = 1
 		) selected_reasons

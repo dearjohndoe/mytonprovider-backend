@@ -237,6 +237,7 @@ type Provider struct {
 	PubKey      string  `json:"pubkey"`
 	Address     string  `json:"address"`
 	UpTime      float32 `json:"uptime"`
+	StatusRatio float32 `json:"status_ratio"`
 	WorkingTime uint64  `json:"working_time"`
 	Rating      float32 `json:"rating"`
 	MaxSpan     uint32  `json:"max_span"`

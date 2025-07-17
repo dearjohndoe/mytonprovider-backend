@@ -159,6 +159,7 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			PubKey:          provider.PubKey,
 			Address:         provider.Address,
 			Status:          provider.Status,
+			StatusRatio:     provider.StatusRatio,
 			UpTime:          provider.UpTime,
 			WorkingTime:     workingTime,
 			Rating:          provider.Rating,
