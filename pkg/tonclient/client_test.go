@@ -2,13 +2,16 @@ package tonclient
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 )
 
 func Test_GetTransactions(t *testing.T) {
 	ctx := context.Background()
 
-	client, err := NewClient(ctx, "https://ton-blockchain.github.io/testnet-global.config.json")
+	logger := slog.Default()
+
+	client, err := NewClient(ctx, "https://ton-blockchain.github.io/testnet-global.config.json", logger)
 	if err != nil {
 		t.Fatalf("failed to create client: %v", err)
 	}
