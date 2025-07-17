@@ -1,60 +1,46 @@
 package httpServer
 
 import (
-	"time"
+	"crypto/md5"
+	"fmt"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-const (
-	rateLimitDuration = 60
-)
+func (h *handler) authorizationMiddleware(c *fiber.Ctx) error {
+	accessToken := c.Get("Authorization")
+	if accessToken == "" {
+		return errorHandler(c, fiber.NewError(fiber.StatusUnauthorized, "unauthorized"))
+	}
 
-func (h *handler) loggerMiddleware(c *fiber.Ctx) error {
-	h.logger.Printf("Request: %s %s", c.Method(), c.Path())
+	if strings.HasPrefix(strings.ToLower(accessToken), "bearer ") {
+		accessToken = accessToken[7:]
+	}
+
+	hash := md5.Sum([]byte(accessToken))
+	tokenHash := fmt.Sprintf("%x", hash[:])
+
+	if _, exists := h.accessTokens[tokenHash]; !exists {
+		return errorHandler(c, fiber.NewError(fiber.StatusForbidden, "forbidden"))
+	}
+
 	return c.Next()
 }
 
-func (h *handler) rateLimiterMiddleware(routeName string, rateLimit int) fiber.Handler {
-	h.clients[routeName] = make(map[string]rateLimiter)
-
-	return func(c *fiber.Ctx) error {
-		clientIP := c.IP()
-
-		h.mu.Lock()
-		defer h.mu.Unlock()
-
-		if _, exists := h.clients[routeName][clientIP]; !exists {
-			h.clients[routeName][clientIP] = rateLimiter{
-				tokens:      rateLimit,
-				lastRequest: time.Now(),
-			}
-		}
-
-		client := h.clients[routeName][clientIP]
-		now := time.Now()
-
-		elapsed := now.Sub(client.lastRequest)
-		refill := int(elapsed.Seconds()) * rateLimit / rateLimitDuration
-		if refill > 0 {
-			client.tokens = min(rateLimit, client.tokens+refill)
-			client.lastRequest = now
-		}
-
-		if client.tokens > 0 {
-			client.tokens--
-			h.clients[routeName][clientIP] = client
-			return c.Next()
-		}
-
-		return errorHandler(c, fiber.NewError(fiber.StatusTooManyRequests, "Too Many Requests"))
-	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
+func (h *handler) loggerMiddleware(c *fiber.Ctx) error {
+	headers := c.GetReqHeaders()
+	if _, ok := headers["Authorization"]; ok {
+		headers["Authorization"] = []string{"REDACTED"}
 	}
 
-	return b
+	h.logger.Debug(
+		"request received",
+		"method", c.Method(),
+		"url", c.OriginalURL(),
+		"headers", headers,
+		"body_length", len(c.Body()),
+	)
+
+	return c.Next()
 }

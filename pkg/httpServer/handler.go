@@ -1,21 +1,20 @@
 package httpServer
 
 import (
-	"log"
-	"sync"
-	"time"
+	"context"
+	"log/slog"
 
 	"github.com/gofiber/fiber/v2"
+
+	v1 "mytonprovider-backend/pkg/models/api/v1"
 )
 
 type providers interface {
-	// AddFile(context.Context) (interface{}, error)
-	// AddFolder(context.Context) (interface{}, error)
-}
-
-type rateLimiter struct {
-	tokens      int
-	lastRequest time.Time
+	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) ([]v1.Provider, error)
+	GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error)
+	GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error)
+	UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest) (err error)
+	UpdateBenchmarks(ctx context.Context, benchmark v1.BenchmarksRequest) (err error)
 }
 
 type errorResponse struct {
@@ -23,20 +22,35 @@ type errorResponse struct {
 }
 
 type handler struct {
-	server    *fiber.App
-	logger    *log.Logger
-	providers providers
-	mu        sync.Mutex
-	clients   map[string]map[string]rateLimiter // route -> clientIP -> rateLimiter
+	server       *fiber.App
+	logger       *slog.Logger
+	providers    providers
+	namespace    string
+	subsystem    string
+	accessTokens map[string]struct{}
 }
 
-func New(server *fiber.App, providers providers, logger *log.Logger) *handler {
-	clients := make(map[string]map[string]rateLimiter)
-
-	return &handler{
-		server:    server,
-		providers: providers,
-		clients:   clients,
-		logger:    logger,
+func New(
+	server *fiber.App,
+	providers providers,
+	accessTokens []string,
+	namespace string,
+	subsystem string,
+	logger *slog.Logger,
+) *handler {
+	accessTokensMap := make(map[string]struct{})
+	for _, token := range accessTokens {
+		accessTokensMap[token] = struct{}{}
 	}
+
+	h := &handler{
+		server:       server,
+		providers:    providers,
+		namespace:    namespace,
+		subsystem:    subsystem,
+		accessTokens: accessTokensMap,
+		logger:       logger,
+	}
+
+	return h
 }

@@ -2,50 +2,193 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/patrickmn/go-cache"
+	"github.com/prometheus/client_golang/prometheus"
 
+	simpleCache "mytonprovider-backend/pkg/cache"
 	"mytonprovider-backend/pkg/httpServer"
+	providersRepository "mytonprovider-backend/pkg/repositories/providers"
+	systemRepository "mytonprovider-backend/pkg/repositories/system"
 	"mytonprovider-backend/pkg/services/providers"
+	"mytonprovider-backend/pkg/tonclient"
+	"mytonprovider-backend/pkg/workers"
+	"mytonprovider-backend/pkg/workers/cleaner"
+	providersmaster "mytonprovider-backend/pkg/workers/providersMaster"
+	"mytonprovider-backend/pkg/workers/telemetry"
 )
 
 func main() {
-	logger := log.Default()
+	if err := run(); err != nil {
+		os.Exit(1)
+	}
+}
 
-	telemetryCache := cache.New(1*time.Minute, 2*time.Minute)
+func run() (err error) {
+	// Tools
+	config := loadConfig()
+	if config == nil {
+		fmt.Println("failed to load configuration")
+		return
+	}
 
-	filesService := providers.NewService(telemetryCache, logger)
+	logLevel := slog.LevelInfo
+	if level, ok := logLevels[config.System.LogLevel]; ok {
+		logLevel = level
+	}
 
-	app := fiber.New()
-	server := httpServer.New(app, filesService, logger)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: logLevel,
+	}))
+	telemetryCache := simpleCache.NewSimpleCache(2 * time.Minute)
+	benchmarksCache := simpleCache.NewSimpleCache(10 * time.Minute)
 
-	server.RegisterRoutes()
+	// Metrics
+	dbRequestsCount := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: config.Metrics.Namespace,
+			Subsystem: config.Metrics.DbSubsystem,
+			Name:      "db_requests_count",
+			Help:      "Db requests count",
+		},
+		[]string{"method", "error"},
+	)
 
-	// Gracefully shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	dbRequestsDuration := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: config.Metrics.Namespace,
+			Subsystem: config.Metrics.DbSubsystem,
+			Name:      "db_requests_duration",
+			Help:      "Db requests duration",
+		},
+		[]string{"method", "error"},
+	)
 
+	workersRunCount := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: config.Metrics.Namespace,
+			Subsystem: config.Metrics.DbSubsystem,
+			Name:      "workers_requests_count",
+			Help:      "Workers requests count",
+		},
+		[]string{"method", "error"},
+	)
+
+	workersRunDuration := prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: config.Metrics.Namespace,
+			Subsystem: config.Metrics.DbSubsystem,
+			Name:      "workers_requests_duration",
+			Help:      "Workers requests duration",
+		},
+		[]string{"method", "error"},
+	)
+
+	prometheus.MustRegister(
+		dbRequestsCount,
+		dbRequestsDuration,
+		workersRunCount,
+		workersRunDuration,
+	)
+
+	// TON
+	ton, err := tonclient.NewClient(context.Background(), config.TON.ConfigURL, logger)
+	if err != nil {
+		logger.Error("failed to create TON client", slog.String("error", err.Error()))
+		return
+	}
+
+	dhtClient, providerClient, err := newProviderClient(context.Background(), config.TON.ConfigURL, config.System.ADNLPort, config.System.Key)
+	if err != nil {
+		logger.Error("failed to create provider client", slog.String("error", err.Error()))
+		return
+	}
+
+	// Postgres
+	connPool, err := connectPostgres(context.Background(), config, logger)
+	if err != nil {
+		logger.Error("failed to connect to Postgres", slog.String("error", err.Error()))
+		return
+	}
+
+	// Database
+	providersRepo := providersRepository.NewRepository(connPool)
+	providersRepo = providersRepository.NewMetrics(dbRequestsCount, dbRequestsDuration, providersRepo)
+
+	systemRepo := systemRepository.NewRepository(connPool)
+	systemRepo = systemRepository.NewMetrics(dbRequestsCount, dbRequestsDuration, systemRepo)
+
+	// Workers
+	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache, benchmarksCache, logger)
+	telemetryWorker = telemetry.NewMetrics(workersRunCount, workersRunDuration, telemetryWorker)
+
+	providersMasterWorker := providersmaster.NewWorker(
+		providersRepo,
+		systemRepo,
+		ton,
+		providerClient,
+		dhtClient,
+		config.TON.MasterAddress,
+		config.TON.BatchSize,
+		logger,
+	)
+	providersMasterWorker = providersmaster.NewMetrics(workersRunCount, workersRunDuration, providersMasterWorker)
+
+	cleanerWorker := cleaner.NewWorker(providersRepo, config.System.StoreHistoryDays, logger)
+	cleanerWorker = cleaner.NewMetrics(workersRunCount, workersRunDuration, cleanerWorker)
+
+	cancelCtx, cancel := context.WithCancel(context.Background())
+	workers := workers.NewWorkers(telemetryWorker, providersMasterWorker, cleanerWorker, logger)
 	go func() {
-		if err := app.Listen(":9090"); err != nil {
-			logger.Printf("Error starting server: %v", err)
+		if wErr := workers.Start(cancelCtx); wErr != nil {
+			logger.Error("failed to start workers", slog.String("error", wErr.Error()))
+			err = wErr
+			return
 		}
 	}()
 
-	<-quit
-	logger.Println("Shutting down server...")
+	// Services
+	providersService := providers.NewService(providersRepo, logger)
+	providersService = providers.NewCacheMiddleware(providersService, telemetryCache, benchmarksCache)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	// HTTP Server
+	accessTokens := strings.Split(config.System.AccessTokens, ",")
+	app := fiber.New()
+	server := httpServer.New(
+		app,
+		providersService,
+		accessTokens,
+		config.Metrics.Namespace,
+		config.Metrics.ServerSubsystem,
+		logger,
+	)
 
-	if err := app.ShutdownWithContext(ctx); err != nil {
-		logger.Printf("Error during server shutdown: %v", err)
+	server.RegisterRoutes()
+
+	go func() {
+		if err := app.Listen(":" + config.System.Port); err != nil {
+			logger.Error("error starting server", slog.String("err", err.Error()))
+		}
+	}()
+
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	<-signalChan
+	cancel()
+
+	err = app.ShutdownWithTimeout(time.Second * 5)
+	if err != nil {
+		logger.Error("server shut down error", slog.String("err", err.Error()))
+		return err
 	}
 
-	logger.Println("Server stopped.")
+	return err
 }
