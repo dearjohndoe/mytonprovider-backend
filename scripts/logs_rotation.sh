@@ -28,4 +28,4 @@ $LOG_FILE {
 }
 EOF
 
-echo "Logs setup complete."
+echo "Done!"

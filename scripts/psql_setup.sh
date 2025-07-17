@@ -6,15 +6,23 @@ PG_HBA="/etc/postgresql/${PG_VERSION}/main/pg_hba.conf"
 
 # deps
 echo "Adding PostgreSQL APT repository..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 apt update
-apt install -y wget gnupg lsb-release
+apt install -y wget gnupg lsb-release git curl nodejs
 curl -s https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/postgresql.gpg
 sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
 
 # psql
 echo "Installing PostgreSQL $PG_VERSION..."
 apt update
+apt upgrade -y
 apt install -y postgresql-$PG_VERSION
+
+# check is postgresql is installed
+if ! command -v psql &> /dev/null; then
+    echo "❌ PostgreSQL $PG_VERSION installation failed"
+    exit 1
+fi
 
 # configure psql
 sed -i 's/^host\s\+all\s\+all\s\+127\.0\.0\.1\/32\s\+.*/host all all 127.0.0.1\/32 md5/' "$PG_HBA"
@@ -35,3 +43,4 @@ echo "Checking connection..."
 PGPASSWORD="$PG_PASSWORD" psql -h 127.0.0.1 -U "$PG_USER" -d "$PG_DB" -c '\conninfo'
 
 echo "✅ PostgreSQL $PG_VERSION ready to use."
+echo "Done!"

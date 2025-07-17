@@ -6,11 +6,13 @@
 # Usage: NEWSUDOUSER=<username> PASSWORD=<password> ./secure_server.sh
 
 if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root"
+  echo "❌ Please run as root"
   exit 1
 fi
 
 if [ -z "$NEWSUDOUSER" ] || [ -z "$PASSWORD" ]; then
+  echo "❌ Missing required environment variables"
+  echo ""
   echo "Usage: NEWSUDOUSER=<username> PASSWORD=<password> $0"
   echo "Example: NEWSUDOUSER=johndoe PASSWORD=yournewsecurepassword $0"
   exit 1
@@ -27,7 +29,7 @@ dpkg-reconfigure unattended-upgrades
 # Configure UFW
 echo "Configuring UFW..."
 ufw default deny incoming
-ufw default deny outgoing
+ufw default allow outgoing
 ufw allow out 53/udp
 ufw allow out 53/tcp
 ufw allow out 80/tcp
@@ -67,12 +69,14 @@ echo "Creating new sudo user $NEWSUDOUSER..."
 adduser --disabled-password --gecos "" "$NEWSUDOUSER"
 usermod -aG sudo "$NEWSUDOUSER"
 mkdir -p /home/"$NEWSUDOUSER"/.ssh
+mkdir -p /opt/provider
 chmod 700 /home/"$NEWSUDOUSER"/.ssh
 chown "$NEWSUDOUSER":"$NEWSUDOUSER" /home/"$NEWSUDOUSER"/.ssh
 cp /root/.ssh/authorized_keys /home/"$NEWSUDOUSER"/.ssh/
 chmod 600 /home/"$NEWSUDOUSER"/.ssh/authorized_keys
 chown "$NEWSUDOUSER":"$NEWSUDOUSER" /home/"$NEWSUDOUSER"/.ssh/authorized_keys
 chown -R "$NEWSUDOUSER":"$NEWSUDOUSER" /opt/provider
+chown -R "$NEWSUDOUSER":"$NEWSUDOUSER" /var/www
 chown -R "$NEWSUDOUSER":"$NEWSUDOUSER" /var/www/mytonprovider.org
 chown -R "$NEWSUDOUSER":"$NEWSUDOUSER" /var/log/mytonprovider.app
 echo "$NEWSUDOUSER:$PASSWORD" | chpasswd

@@ -22,3 +22,5 @@ else
 fi
 
 systemctl restart postgresql
+
+echo "Done!"

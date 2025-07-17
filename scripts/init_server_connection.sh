@@ -6,6 +6,8 @@
 # Usage: REMOTEUSER=<username> HOST=<host> PASSWORD=<password> ./init_server_connection.sh
 
 if [ -z "$REMOTEUSER" ] || [ -z "$HOST" ] || [ -z "$PASSWORD" ]; then
+  echo "❌ Missing required environment variables"
+  echo ""
   echo "Usage: REMOTEUSER=<username> HOST=<host> PASSWORD=<password> $0"
   echo "Example: REMOTEUSER=root HOST=123.45.67.89 PASSWORD=yourpassword $0"
   exit 1
@@ -44,3 +46,5 @@ sed -i 's/^#PubkeyAuthentication no/PubkeyAuthentication yes/' /etc/ssh/sshd_con
 systemctl restart ssh || systemctl restart sshd || service ssh restart || service sshd restart
 exit
 EOF
+
+echo "Done!"

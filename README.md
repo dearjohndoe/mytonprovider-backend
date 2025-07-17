@@ -23,6 +23,10 @@ cd ton-provider-org
 ```
 
 2. **Run installation script**
+
+**DOMAIN** and **INSTALL_SSL** is optional.
+This script must be run only on clean server with root user (was tested only on debian 12 with root)
+
 ```bash
 REMOTEUSER=root \
 HOST=123.45.67.89 \
@@ -37,8 +41,6 @@ DOMAIN=domain_u_own.org \
 INSTALL_SSL=true \
 ./setup_server.sh
 ```
-
-**DOMAIN** and **INSTALL_SSL** is optional.
 
 ## Dev:
 ### VS Code Configuration

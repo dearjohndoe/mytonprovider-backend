@@ -1,7 +1,14 @@
-CREATE SCHEMA providers
-    AUTHORIZATION pguser;
 
--- providers.benchmarks
+-- SCHEMAS
+
+CREATE SCHEMA providers AUTHORIZATION pguser;
+
+CREATE SCHEMA public AUTHORIZATION pg_database_owner;
+
+CREATE SCHEMA system AUTHORIZATION pguser;
+
+-- TABLES
+
 CREATE TABLE IF NOT EXISTS providers.benchmarks
 (
     public_key text COLLATE pg_catalog."default" NOT NULL,
@@ -16,19 +23,11 @@ CREATE TABLE IF NOT EXISTS providers.benchmarks
     country character varying(128) COLLATE pg_catalog."default",
     isp character varying(128) COLLATE pg_catalog."default",
     CONSTRAINT benchmarks_pkey PRIMARY KEY (public_key)
-)
+);
 
-TABLESPACE pg_default;
-
-ALTER TABLE providers.benchmarks
-    OWNER to pguser;
-
-COMMENT ON TABLE providers.benchmarks IS 'To store benchmarks data for providers';
-
--- providers.benchmarks_history
 CREATE TABLE IF NOT EXISTS providers.benchmarks_history
 (
-    id integer NOT NULL DEFAULT nextval('providers.benchmarks_history_id_seq'::regclass),
+    id serial,
     archived_at timestamp with time zone NOT NULL DEFAULT now(),
     public_key text COLLATE pg_catalog."default" NOT NULL,
     disk jsonb,
@@ -42,17 +41,8 @@ CREATE TABLE IF NOT EXISTS providers.benchmarks_history
     country character varying(128) COLLATE pg_catalog."default",
     isp character varying(128) COLLATE pg_catalog."default",
     CONSTRAINT benchmarks_history_pkey PRIMARY KEY (id)
-)
+);
 
-TABLESPACE pg_default;
-
-ALTER TABLE providers.benchmarks_history
-    OWNER to pguser;
-
-CREATE SCHEMA system
-    AUTHORIZATION pguser;
-
--- providers.providers
 CREATE TABLE IF NOT EXISTS providers.providers
 (
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
@@ -64,23 +54,21 @@ CREATE TABLE IF NOT EXISTS providers.providers
     rate_per_mb_per_day bigint,
     min_span integer,
     max_span integer,
-    is_send_telemetry boolean,
     is_initialized boolean NOT NULL DEFAULT false,
     uptime double precision NOT NULL DEFAULT 0.0,
     max_bag_size_bytes bigint NOT NULL DEFAULT 0,
+    last_tx_lt bigint NOT NULL DEFAULT 0,
+    ip character varying(16) COLLATE pg_catalog."default" DEFAULT NULL::character varying,
+    port integer DEFAULT 0,
+    status integer,
+    status_ratio real NOT NULL DEFAULT 0,
     CONSTRAINT providers_pkey PRIMARY KEY (public_key),
     CONSTRAINT providers_address_key UNIQUE (address)
-)
+);
 
-TABLESPACE pg_default;
-
-ALTER TABLE providers.providers
-    OWNER to pguser;
-
--- providers.providers_history
 CREATE TABLE IF NOT EXISTS providers.providers_history
 (
-    id integer NOT NULL DEFAULT nextval('providers.providers_history_id_seq'::regclass),
+    id serial,
     archived_at timestamp with time zone NOT NULL DEFAULT now(),
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
     address character varying(64) COLLATE pg_catalog."default" NOT NULL,
@@ -91,45 +79,55 @@ CREATE TABLE IF NOT EXISTS providers.providers_history
     rate_per_mb_per_day bigint,
     min_span integer,
     max_span integer,
-    is_send_telemetry boolean,
     is_initialized boolean NOT NULL,
     uptime double precision NOT NULL DEFAULT 0.0,
     CONSTRAINT providers_history_pkey PRIMARY KEY (id)
-)
+);
 
-TABLESPACE pg_default;
-
-ALTER TABLE providers.providers_history
-    OWNER to pguser;
-
--- providers.statuses
 CREATE TABLE IF NOT EXISTS providers.statuses
 (
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
     check_time timestamp with time zone NOT NULL,
     is_online boolean NOT NULL,
     CONSTRAINT statuses_pkey PRIMARY KEY (public_key)
-)
+);
 
-TABLESPACE pg_default;
-
-ALTER TABLE providers.statuses
-    OWNER to pguser;
-
--- providers.statuses_history
 CREATE TABLE IF NOT EXISTS providers.statuses_history
 (
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
     check_time timestamp with time zone NOT NULL,
     is_online boolean NOT NULL
-)
+);
 
-TABLESPACE pg_default;
+CREATE TABLE IF NOT EXISTS providers.storage_contracts
+(
+    address character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    provider_address character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    bag_id character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    owner_address character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    size bigint NOT NULL,
+    chunk_size bigint NOT NULL,
+    last_tx_lt bigint NOT NULL,
+    reason integer,
+    reason_timestamp timestamp with time zone,
+    CONSTRAINT storage_contracts_pkey PRIMARY KEY (address, provider_address)
+);
 
-ALTER TABLE providers.statuses_history
-    OWNER to pguser;
+CREATE TABLE IF NOT EXISTS providers.storage_contracts_history
+(
+    address character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    provider_address character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    bag_id character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    owner_address character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    size bigint NOT NULL,
+    chunk_size bigint NOT NULL,
+    last_tx_lt bigint NOT NULL,
+    reason integer,
+    reason_timestamp timestamp with time zone,
+    deleted_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT storage_contracts_history_pkey PRIMARY KEY (address, provider_address, deleted_at)
+);
 
--- providers.telemetry
 CREATE TABLE IF NOT EXISTS providers.telemetry
 (
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
@@ -167,18 +165,13 @@ CREATE TABLE IF NOT EXISTS providers.telemetry
     country character varying(128) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
     isp character varying(128) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
     updated_at timestamp with time zone DEFAULT now(),
+    x_real_ip character varying(16) COLLATE pg_catalog."default" DEFAULT NULL::character varying,
     CONSTRAINT telemetry_pkey PRIMARY KEY (public_key)
-)
+);
 
-TABLESPACE pg_default;
-
-ALTER TABLE providers.telemetry
-    OWNER to pguser;
-
--- providers.telemetry_history
 CREATE TABLE IF NOT EXISTS providers.telemetry_history
 (
-    id integer NOT NULL DEFAULT nextval('providers.telemetry_history_id_seq'::regclass),
+    id serial,
     archived_at timestamp with time zone NOT NULL DEFAULT now(),
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
     storage_git_hash character varying(40) COLLATE pg_catalog."default" NOT NULL,
@@ -205,20 +198,21 @@ CREATE TABLE IF NOT EXISTS providers.telemetry_history
     ram_usage_percent real,
     cpu_number integer NOT NULL,
     cpu_is_virtual boolean NOT NULL,
+    x_real_ip character varying(16) COLLATE pg_catalog."default" DEFAULT NULL::character varying,
     CONSTRAINT telemetry_history_pkey PRIMARY KEY (id)
-)
+);
 
-TABLESPACE pg_default;
+CREATE TABLE IF NOT EXISTS system.params
+(
+    key character varying(256) COLLATE pg_catalog."default" NOT NULL,
+    value character varying(1024) COLLATE pg_catalog."default",
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone,
+    CONSTRAINT params_pkey PRIMARY KEY (key)
+);
 
-ALTER TABLE providers.telemetry_history
-    OWNER to pguser;
+-- FUNCTIONS AND TRIGGERS
 
-
-
-
-
--- functions
--- providers.parse_speed_to_int(...)
 CREATE OR REPLACE FUNCTION providers.parse_speed_to_int(
 	speed_text text)
     RETURNS integer
@@ -231,11 +225,9 @@ DECLARE
     unit text;
     multiplier integer := 1;
 BEGIN
-    -- Extract numeric value and unit
     value := regexp_replace(speed_text, '[^0-9\.]', '', 'g')::numeric;
-    unit := regexp_replace(speed_text, '[0-9\.\/]', '', 'g');
+    unit := regexp_replace(speed_text, '[0-9\.]', '', 'g');
 
-    -- Determine multiplier based on unit
     IF unit = 'KiBps' OR unit = 'KiB/s' OR unit = 'KiB' THEN
         multiplier := 1024;
     ELSIF unit = 'MiBps' OR unit = 'MiB/s' OR unit = 'MiB' THEN
@@ -254,11 +246,6 @@ BEGIN
 END;
 $BODY$;
 
-ALTER FUNCTION providers.parse_speed_to_int(speed_text text)
-    OWNER TO pguser;
-
--- triggers
--- providers.archive_benchmarks()
 CREATE FUNCTION providers.archive_benchmarks()
     RETURNS trigger
     LANGUAGE plpgsql
@@ -275,10 +262,6 @@ BEGIN
 END;
 $BODY$;
 
-ALTER FUNCTION providers.archive_benchmarks()
-    OWNER TO pguser;
-
--- providers.archive_benchmarks_after_update()
 CREATE FUNCTION providers.archive_benchmarks_after_update()
     RETURNS trigger
     LANGUAGE plpgsql
@@ -297,10 +280,6 @@ BEGIN
 END;
 $BODY$;
 
-ALTER FUNCTION providers.archive_benchmarks_after_update()
-    OWNER TO pguser;
-
--- providers.archive_telemetry()
 CREATE FUNCTION providers.archive_telemetry()
     RETURNS trigger
     LANGUAGE plpgsql
@@ -312,21 +291,17 @@ BEGIN
         public_key, storage_git_hash, provider_git_hash, cpu_name, pings, cpu_product_name,
         uname_sysname, uname_release, uname_version, uname_machine, disk_name, cpu_load, total_space, free_space, used_space,
         used_provider_space, total_provider_space, total_swap, usage_swap, swap_usage_percent, usage_ram, total_ram,
-        ram_usage_percent, cpu_number, cpu_is_virtual
+        ram_usage_percent, cpu_number, cpu_is_virtual, x_real_ip
     ) VALUES (
         OLD.public_key, OLD.storage_git_hash, OLD.provider_git_hash, OLD.cpu_name, OLD.pings, OLD.cpu_product_name,
         OLD.uname_sysname, OLD.uname_release, OLD.uname_version, OLD.uname_machine, OLD.disk_name, OLD.cpu_load, OLD.total_space, OLD.free_space, OLD.used_space,
         OLD.used_provider_space, OLD.total_provider_space, OLD.total_swap, OLD.usage_swap, OLD.swap_usage_percent, OLD.usage_ram, OLD.total_ram,
-        OLD.ram_usage_percent, OLD.cpu_number, OLD.cpu_is_virtual
+        OLD.ram_usage_percent, OLD.cpu_number, OLD.cpu_is_virtual, OLD.x_real_ip
     );
     RETURN NEW;
 END;
 $BODY$;
 
-ALTER FUNCTION providers.archive_telemetry()
-    OWNER TO pguser;
-
--- providers.log_provider_update()
 CREATE FUNCTION providers.log_provider_update()
     RETURNS trigger
     LANGUAGE plpgsql
@@ -358,7 +333,6 @@ begin
             rate_per_mb_per_day,
             min_span,
             max_span,
-            is_send_telemetry,
             is_initialized
         ) values (
             old.public_key,
@@ -371,7 +345,6 @@ begin
             old.rate_per_mb_per_day,
             old.min_span,
             old.max_span,
-            old.is_send_telemetry,
             old.is_initialized
         );
     end if;
@@ -379,10 +352,6 @@ begin
 end;
 $BODY$;
 
-ALTER FUNCTION providers.log_provider_update()
-    OWNER TO pguser;
-
--- providers.log_status_history()
 CREATE FUNCTION providers.log_status_history()
     RETURNS trigger
     LANGUAGE plpgsql
@@ -403,61 +372,66 @@ begin
 end;
 $BODY$;
 
-ALTER FUNCTION providers.log_status_history()
-    OWNER TO pguser;
-
--- Trigger: benchmarks_archive_after_update
-CREATE OR REPLACE TRIGGER benchmarks_archive_after_update
-    AFTER UPDATE 
-    ON providers.benchmarks
-    FOR EACH ROW
-    EXECUTE FUNCTION providers.archive_benchmarks_after_update();
-
--- Trigger: trg_log_provider_update
-CREATE OR REPLACE TRIGGER trg_log_provider_update
-    BEFORE UPDATE 
-    ON providers.providers
-    FOR EACH ROW
-    EXECUTE FUNCTION providers.log_provider_update();
-
--- Trigger: trg_log_status_update
-CREATE OR REPLACE TRIGGER trg_log_status_update
-    AFTER UPDATE 
-    ON providers.statuses
-    FOR EACH ROW
-    EXECUTE FUNCTION providers.log_status_history();
-
--- Trigger: telemetry_archive_before_delete
-CREATE OR REPLACE TRIGGER telemetry_archive_before_delete
-    BEFORE DELETE
-    ON providers.telemetry
-    FOR EACH ROW
-    EXECUTE FUNCTION providers.archive_telemetry();
+CREATE FUNCTION providers.move_to_storage_contracts_history()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+BEGIN
+    -- Insert the deleted record into the history table
+    INSERT INTO providers.storage_contracts_history (
+        address,
+        provider_address,
+        bag_id,
+        owner_address,
+        size,
+        chunk_size,
+        last_tx_lt,
+        reason,
+        reason_timestamp,
+        deleted_at
+    ) VALUES (
+        OLD.address,
+        OLD.provider_address,
+        OLD.bag_id,
+        OLD.owner_address,
+        OLD.size,
+        OLD.chunk_size,
+        OLD.last_tx_lt,
+        OLD.reason,
+        OLD.reason_timestamp,
+        now()
+    );
     
--- Trigger: telemetry_archive_before_update
-CREATE OR REPLACE TRIGGER telemetry_archive_before_update
-    BEFORE UPDATE 
-    ON providers.telemetry
-    FOR EACH ROW
-    EXECUTE FUNCTION providers.archive_telemetry();
+    RETURN OLD;
+END;
+$BODY$;
 
+CREATE TRIGGER benchmarks_archive_after_update 
+AFTER UPDATE ON providers.benchmarks 
+FOR EACH ROW EXECUTE FUNCTION providers.archive_benchmarks_after_update();
 
+CREATE TRIGGER trg_log_provider_update 
+BEFORE UPDATE ON providers.providers 
+FOR EACH ROW EXECUTE FUNCTION providers.log_provider_update();
 
+CREATE TRIGGER trg_log_status_insert 
+AFTER INSERT ON providers.statuses 
+FOR EACH ROW EXECUTE FUNCTION providers.log_status_history();
 
+CREATE TRIGGER trg_log_status_update 
+AFTER UPDATE ON providers.statuses 
+FOR EACH ROW EXECUTE FUNCTION providers.log_status_history();
 
--- system.params
-CREATE TABLE IF NOT EXISTS system.params
-(
-    key character varying(256) COLLATE pg_catalog."default" NOT NULL,
-    value character varying(1024) COLLATE pg_catalog."default",
-    created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone,
-    CONSTRAINT params_pkey PRIMARY KEY (key)
-)
+CREATE TRIGGER storage_contracts_delete_trigger 
+BEFORE DELETE ON providers.storage_contracts 
+FOR EACH ROW EXECUTE FUNCTION providers.move_to_storage_contracts_history();
 
-TABLESPACE pg_default;
+CREATE TRIGGER telemetry_archive_before_delete 
+BEFORE DELETE ON providers.telemetry 
+FOR EACH ROW EXECUTE FUNCTION providers.archive_telemetry();
 
-ALTER TABLE system.params
-    OWNER to pguser;
-
-COMMENT ON TABLE system.params IS 'To store sustem settings and parameters of the application';
+CREATE TRIGGER telemetry_archive_before_update 
+BEFORE UPDATE ON providers.telemetry 
+FOR EACH ROW EXECUTE FUNCTION providers.archive_telemetry();
