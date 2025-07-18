@@ -124,6 +124,7 @@ execute_remote_script() {
     if [[ "$script_name" == "install_backend.sh" ]]; then
         local exe_path="$(dirname "$0")/mtpo-backend"
         local config_path="$(dirname "$0")/config.env"
+        ssh "$user"@"$HOST" "mkdir -p /opt/provider/my"
         scp "$exe_path" "$user"@"$HOST":/opt/provider/my/
         scp "$config_path" "$user"@"$HOST":/opt/provider/my/
     fi

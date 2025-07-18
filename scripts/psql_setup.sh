@@ -6,7 +6,7 @@ PG_HBA="/etc/postgresql/${PG_VERSION}/main/pg_hba.conf"
 
 # deps
 echo "Adding PostgreSQL APT repository..."
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+wget -qO- https://deb.nodesource.com/setup_20.x | bash -
 apt update
 apt install -y wget gnupg lsb-release git curl nodejs
 curl -s https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor > /etc/apt/trusted.gpg.d/postgresql.gpg
