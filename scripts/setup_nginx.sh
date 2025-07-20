@@ -21,8 +21,8 @@ NGINX_ENABLED="/etc/nginx/sites-enabled/$SITE_NAME"
 WEB_ROOT="/var/www/$SITE_NAME"
 
 echo "Installing Nginx..."
-apt update
-apt install -y nginx
+apt-get update
+apt-get install -y nginx
 
 echo "Creating Nginx configuration..."
 mkdir -p "$WEB_ROOT"
@@ -129,7 +129,7 @@ systemctl restart nginx
 
 install_ssl() {
     echo "Installing SSL certificate with Let's Encrypt..."
-    apt install -y certbot python3-certbot-nginx
+    apt-get install -y certbot python3-certbot-nginx
     
     # Generate SSL certificate
     certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email admin@"$DOMAIN" --redirect

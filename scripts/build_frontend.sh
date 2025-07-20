@@ -5,6 +5,9 @@ set -e
 REPO_DIR="mytonprovider-org"
 REPO_URL="https://github.com/dearjohndoe/mytonprovider-org.git"
 
+mkdir -p /tmp/frontend
+cd /tmp/frontend
+
 if [ -d "$REPO_DIR" ]; then
     echo "Repository directory '$REPO_DIR' found. Pulling latest changes."
     cd "$REPO_DIR"

@@ -3,7 +3,9 @@
 # This script builds the backend application for the TON provider.
 # Also generates the .env file with necessary configurations.
 
-go build -o mtpo-backend ../cmd
+cd "$WORK_DIR/mytonprovider-backend/"
+
+go build -buildvcs=false -o mtpo-backend ./cmd
 
 cat <<EOL > config.env
 SYSTEM_PORT=9090
@@ -18,3 +20,8 @@ DB_PASSWORD=${PG_PASSWORD}
 DB_NAME=${PG_DB}
 SYSTEM_LOG_LEVEL=0
 EOL
+
+mv mtpo-backend /opt/provider/
+mv config.env /opt/provider/
+
+echo "Backend application built and configuration file created successfully."
