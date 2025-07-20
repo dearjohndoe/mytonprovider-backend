@@ -36,7 +36,7 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 		failureInterval = 5 * time.Second
 	)
 
-	logger := w.logger.With(slog.String("worker", "telemetry"))
+	logger := w.logger.With(slog.String("worker", "UpdateTelemetry"))
 	logger.Debug("updating telemetry")
 
 	interval = successInterval
@@ -128,7 +128,7 @@ func (w *telemetryWorker) UpdateBenchmarks(ctx context.Context) (interval time.D
 		failureInterval = 5 * time.Second
 	)
 
-	logger := w.logger.With(slog.String("worker", "benchmarks"))
+	logger := w.logger.With(slog.String("worker", "UpdateBenchmarks"))
 
 	interval = successInterval
 
@@ -140,12 +140,12 @@ func (w *telemetryWorker) UpdateBenchmarks(ctx context.Context) (interval time.D
 
 	items := make([]db.BenchmarkUpdate, 0, len(pubkeys))
 	for _, pubkey := range pubkeys {
-		item, found := w.benchmarksBuffer.Release(pubkey)
+		item, found := w.benchmarksBuffer.Release(strings.ToLower(pubkey))
 		if !found {
 			continue
 		}
 
-		benchmarkItem, ok := item.(*v1.BenchmarksRequest)
+		benchmarkItem, ok := item.(v1.BenchmarksRequest)
 		if !ok {
 			continue
 		}

@@ -28,7 +28,7 @@ func (m *metricsMiddleware) UpdateTelemetry(ctx context.Context) (interval time.
 func (m *metricsMiddleware) UpdateBenchmarks(ctx context.Context) (interval time.Duration, err error) {
 	defer func(s time.Time) {
 		labels := []string{
-			"UpdateTelemetry", strconv.FormatBool(err != nil),
+			"UpdateBenchmarks", strconv.FormatBool(err != nil),
 		}
 		m.reqCount.WithLabelValues(labels...).Add(1)
 		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
