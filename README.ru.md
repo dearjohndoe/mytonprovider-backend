@@ -14,30 +14,42 @@ Backend сервис для mytonprovider.org - сервис мониторин�
 
 ## Установка и настройка
 
-1. **Склонируйте репозиторий**
-   ```bash
-   git clone https://github.com/dearjohndoe/mytonprovider-backend.git
-   cd ton-provider-org
-   ```
+Для начала нам потребуется чистый сервер на Debian 12 с рут пользователем.
 
-2. **Запуск скрипта установки**
-**DOMAIN** и **INSTALL_SSL** не обязательны.
-Этот скрипт должен быть запущен на чистом сервере с рут пользователя (был протестирован на чистом Debian 12 с рутом)
+1. **Склонируйте скрипт для подключения по ключу**
+
+Вместо логина по паролю, скрипт безопасности требует использовать логин по ключу. Этот скрипт нужно запускать на рабочей машине, он не потребует sudo, а только пробросит ключи для доступа.
 
 ```bash
-REMOTEUSER=root \
-HOST=123.45.67.89 \
-PASSWORD=yourpassword \
-PG_VERSION=15 \
-PG_USER=pguser \
-PG_PASSWORD=secret \
-PG_DB=providerdb \
-NEWSUDOUSER=johndoe \
-NEWUSER_PASSWORD=newsecurepassword \
-DOMAIN=domain_u_own.org \
-INSTALL_SSL=true \
-./setup_server.sh
+wget https://raw.githubusercontent.com/dearjohndoe/mytonprovider-backend/refs/heads/master/scripts/init_server_connection.sh
 ```
+
+2. **Пробрасываем ключи и закрываем доступ по паролю**
+
+```bash
+USERNAME=root PASSWORD=supersecretpassword HOST=123.45.67.89 bash init_server_connection.sh
+```
+
+В случае ошибки man-in-the-middle, возможно вам стоит удалить known_hosts.
+
+3. **Заходим на удаленную машину и качаем скрипт установки**
+
+```bash
+ssh root@123.45.67.89 # Если требует пароль, то предыдущий шаг завершился с ошибкой.
+
+wget https://raw.githubusercontent.com/dearjohndoe/mytonprovider-backend/refs/heads/master/scripts/setup_server.sh
+```
+
+4. **Запускаем настройку и установку сервера**
+
+Займет несколько минут.
+
+```bash
+PG_USER=pguser PG_PASSWORD=secret PG_DB=providerdb NEWFRONTENDUSER=jdfront NEWSUDOUSER=johndoe NEWUSER_PASSWORD=newsecurepassword bash ./setup_server.sh
+```
+
+По завершении выведет полезную информацию по использованию сервера.
+
 
 ## Разработка
 

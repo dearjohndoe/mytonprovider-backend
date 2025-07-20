@@ -16,31 +16,41 @@ This backend service:
 
 ## Installation & Setup
 
-1. **Clone the repository**
-```bash
-git clone https://github.com/dearjohndoe/mytonprovider-backend.git
-cd ton-provider-org
-```
+To get started, you'll need a clean Debian 12 server with root user access.
 
-2. **Run installation script**
+1. **Download the server connection script**
 
-**DOMAIN** and **INSTALL_SSL** is optional.
-This script must be run only on clean server with root user (was tested only on debian 12 with root)
+Instead of password login, the security script requires using key-based authentication. This script should be run on your local machine, it doesn't require sudo, and will only forward keys for access.
 
 ```bash
-REMOTEUSER=root \
-HOST=123.45.67.89 \
-PASSWORD=yourpassword \
-PG_VERSION=15 \
-PG_USER=pguser \
-PG_PASSWORD=secret \
-PG_DB=providerdb \
-NEWSUDOUSER=johndoe \
-NEWUSER_PASSWORD=newsecurepassword \
-DOMAIN=domain_u_own.org \
-INSTALL_SSL=true \
-./setup_server.sh
+wget https://raw.githubusercontent.com/dearjohndoe/mytonprovider-backend/refs/heads/master/scripts/init_server_connection.sh
 ```
+
+2. **Forward keys and disable password access**
+
+```bash
+USERNAME=root PASSWORD=supersecretpassword HOST=123.45.67.89 bash init_server_connection.sh
+```
+
+In case of a man-in-the-middle error, you might need to remove known_hosts.
+
+3. **Log into the remote machine and download the installation script**
+
+```bash
+ssh root@123.45.67.89 # If it asks for a password, the previous step failed.
+
+wget https://raw.githubusercontent.com/dearjohndoe/mytonprovider-backend/refs/heads/master/scripts/setup_server.sh
+```
+
+4. **Run server setup and installation**
+
+This will take a few minutes.
+
+```bash
+PG_USER=pguser PG_PASSWORD=secret PG_DB=providerdb NEWFRONTENDUSER=jdfront NEWSUDOUSER=johndoe NEWUSER_PASSWORD=newsecurepassword bash ./setup_server.sh
+```
+
+Upon completion, it will output useful information about server usage.
 
 ## Dev:
 ### VS Code Configuration
