@@ -181,7 +181,7 @@ func (m *metricsMiddleware) UpdateStatuses(ctx context.Context) (err error) {
 	return m.repo.UpdateStatuses(ctx)
 }
 
-func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error) {
+func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts []db.ContractToProviderRelation, err error) {
 	defer func(s time.Time) {
 		labels := []string{
 			"GetStorageContracts", strconv.FormatBool(err != nil),
@@ -192,7 +192,7 @@ func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts 
 	return m.repo.GetStorageContracts(ctx)
 }
 
-func (m *metricsMiddleware) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error) {
+func (m *metricsMiddleware) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error) {
 	defer func(s time.Time) {
 		labels := []string{
 			"UpdateRejectedStorageContracts", strconv.FormatBool(err != nil),

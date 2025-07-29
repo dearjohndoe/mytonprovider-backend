@@ -14,6 +14,7 @@ import (
 
 	"github.com/xssnick/tonutils-go/address"
 	"github.com/xssnick/tonutils-go/adnl/dht"
+	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 
 	"mytonprovider-backend/pkg/models/db"
@@ -44,8 +45,8 @@ type providers interface {
 	GetAllProvidersWallets(ctx context.Context) (wallets []db.ProviderWallet, err error)
 	UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error)
 	AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error)
-	GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error)
-	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error)
+	GetStorageContracts(ctx context.Context) (contracts []db.ContractToProviderRelation, err error)
+	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
 	UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP) (err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
@@ -415,13 +416,13 @@ func (w *providersMasterWorker) StoreProof(ctx context.Context) (interval time.D
 		return
 	}
 
-	availableProvidersIPs, err := w.updateProvidersIPs(ctx, storageContracts)
+	storageContracts, err = w.updateRejectedContracts(ctx, storageContracts)
 	if err != nil {
 		interval = failureInterval
 		return
 	}
 
-	storageContracts, err = w.updateRejectedContracts(ctx, storageContracts)
+	availableProvidersIPs, err := w.updateProvidersIPs(ctx, storageContracts)
 	if err != nil {
 		interval = failureInterval
 		return
@@ -483,7 +484,7 @@ func (w *providersMasterWorker) UpdateRating(ctx context.Context) (interval time
 	return
 }
 
-func (w *providersMasterWorker) updateActiveContracts(ctx context.Context, storageContracts []db.StorageContractShort, availableProvidersIPs map[string]db.ProviderIP) (err error) {
+func (w *providersMasterWorker) updateActiveContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation, availableProvidersIPs map[string]db.ProviderIP) (err error) {
 	log := w.logger.With(slog.String("worker", "StoreProof"), slog.String("function", "updateActiveContracts"))
 
 	if len(storageContracts) == 0 || len(availableProvidersIPs) == 0 {
@@ -497,7 +498,7 @@ func (w *providersMasterWorker) updateActiveContracts(ctx context.Context, stora
 
 	for _, sc := range storageContracts {
 		wg.Add(1)
-		go func(contract db.StorageContractShort) {
+		go func(contract db.ContractToProviderRelation) {
 			defer wg.Done()
 
 			semaphore <- struct{}{}
@@ -528,7 +529,7 @@ func (w *providersMasterWorker) updateActiveContracts(ctx context.Context, stora
 	return nil
 }
 
-func (w *providersMasterWorker) processContractProof(ctx context.Context, sc db.StorageContractShort, availableProvidersIPs map[string]db.ProviderIP, log *slog.Logger) (result db.ContractProofsCheck) {
+func (w *providersMasterWorker) processContractProof(ctx context.Context, sc db.ContractToProviderRelation, availableProvidersIPs map[string]db.ProviderIP, log *slog.Logger) (result db.ContractProofsCheck) {
 	timestamp := time.Now()
 
 	result = db.ContractProofsCheck{
@@ -554,7 +555,7 @@ func (w *providersMasterWorker) processContractProof(ctx context.Context, sc db.
 	return result
 }
 
-func (w *providersMasterWorker) validateContractData(sc db.StorageContractShort) (reason uint32, ok bool) {
+func (w *providersMasterWorker) validateContractData(sc db.ContractToProviderRelation) (reason uint32, ok bool) {
 	if sc.Address == "" {
 		reason = invalidAddress
 		return
@@ -575,7 +576,7 @@ func (w *providersMasterWorker) validateContractData(sc db.StorageContractShort)
 	return
 }
 
-func (w *providersMasterWorker) verifyStorageProof(ctx context.Context, sc db.StorageContractShort, log *slog.Logger) uint32 {
+func (w *providersMasterWorker) verifyStorageProof(ctx context.Context, sc db.ContractToProviderRelation, log *slog.Logger) uint32 {
 	addr, err := address.ParseAddr(sc.Address)
 	if err != nil {
 		log.Error("failed to parse contract address", "address", sc.Address, "error", err)
@@ -613,7 +614,7 @@ func (w *providersMasterWorker) verifyStorageProof(ctx context.Context, sc db.St
 	return validProvider
 }
 
-func (w *providersMasterWorker) updateRejectedContracts(ctx context.Context, storageContracts []db.StorageContractShort) (activeContracts []db.StorageContractShort, err error) {
+func (w *providersMasterWorker) updateRejectedContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (activeContracts []db.ContractToProviderRelation, err error) {
 	log := w.logger.With(slog.String("worker", "updateRejectedContracts"))
 
 	if len(storageContracts) == 0 {
@@ -621,9 +622,9 @@ func (w *providersMasterWorker) updateRejectedContracts(ctx context.Context, sto
 		return
 	}
 
-	uniqueContractAddresses := make(map[string]struct{}, len(storageContracts))
+	uniqueContractAddresses := make(map[string]uint64, len(storageContracts))
 	for _, sc := range storageContracts {
-		uniqueContractAddresses[sc.Address] = struct{}{}
+		uniqueContractAddresses[sc.Address] = sc.Size
 	}
 
 	contractAddresses := make([]string, 0, len(uniqueContractAddresses))
@@ -637,17 +638,30 @@ func (w *providersMasterWorker) updateRejectedContracts(ctx context.Context, sto
 		return
 	}
 
+	// map of storage contract addresses to their active providers
 	activeRelations := make(map[string]map[string]struct{}, len(contractsProvidersList))
 	for _, contract := range contractsProvidersList {
-		activeRelations[contract.Address] = make(map[string]struct{}, len(contract.Providers))
+		contractProviders := make(map[string]struct{}, len(contract.Providers))
 		for _, provider := range contract.Providers {
-			key := fmt.Sprintf("%x", provider.Key)
-			activeRelations[contract.Address][key] = struct{}{}
+			providerPublicKey := fmt.Sprintf("%x", provider.Key)
+			if isRemovedByLowBalance(new(big.Int).SetUint64(uniqueContractAddresses[contract.Address]), provider, contract) {
+				log.Warn("storage contract has not enough balance for too long, will be removed",
+					"provider", providerPublicKey,
+					"address", contract.Address,
+					"balance", contract.Balance)
+				continue
+			}
+
+			contractProviders[providerPublicKey] = struct{}{}
+		}
+
+		if len(contractProviders) != 0 {
+			activeRelations[contract.Address] = contractProviders
 		}
 	}
 
-	activeContracts = make([]db.StorageContractShort, 0, len(storageContracts))
-	closedContracts := make([]db.StorageContractShort, 0, len(storageContracts))
+	activeContracts = make([]db.ContractToProviderRelation, 0, len(storageContracts))
+	closedContracts := make([]db.ContractToProviderRelation, 0, len(storageContracts))
 
 	for _, sc := range storageContracts {
 		if contractProviders, exists := activeRelations[sc.Address]; exists {
@@ -674,12 +688,42 @@ func (w *providersMasterWorker) updateRejectedContracts(ctx context.Context, sto
 	return
 }
 
-func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageContracts []db.StorageContractShort) (availableProvidersIPs map[string]db.ProviderIP, err error) {
+func isRemovedByLowBalance(bagSize *big.Int, provider tonclient.Provider, contract tonclient.StorageContractProviders) bool {
+	var storageFee = tlb.MustFromTON("0.05").Nano()
+
+	mul := new(big.Int).Mul(new(big.Int).SetUint64(provider.RatePerMBDay), bagSize)
+	mul = mul.Mul(mul, new(big.Int).SetUint64(uint64(provider.MaxSpan)))
+	bounty := new(big.Int).Div(mul, big.NewInt(24*60*60*1024*1024))
+	bounty = bounty.Add(bounty, storageFee)
+
+	if new(big.Int).SetUint64(contract.Balance).Cmp(bounty) < 0 {
+		var deadline int64
+		fresh := provider.LastProofTime.Unix() <= 0
+		if fresh {
+			return false
+		} else {
+			deadline = provider.LastProofTime.Unix() + int64(provider.MaxSpan) + 3600
+		}
+
+		if time.Now().Unix() > deadline {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageContracts []db.ContractToProviderRelation) (availableProvidersIPs map[string]db.ProviderIP, err error) {
 	log := w.logger.With(slog.String("worker", "StoreProof"), slog.String("function", "updateProvidersIPs"))
+
+	if len(storageContracts) == 0 {
+		log.Debug("no storage contracts to process for IP update")
+		return nil, nil
+	}
 
 	availableProvidersIPs = make(map[string]db.ProviderIP, len(storageContracts))
 
-	uniqueProviders := make(map[string]db.StorageContractShort)
+	uniqueProviders := make(map[string]db.ContractToProviderRelation)
 	for _, sc := range storageContracts {
 		if _, exists := uniqueProviders[sc.ProviderPublicKey]; !exists {
 			uniqueProviders[sc.ProviderPublicKey] = sc
@@ -693,7 +737,7 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 
 	for _, sc := range uniqueProviders {
 		wg.Add(1)
-		go func(contract db.StorageContractShort) {
+		go func(contract db.ContractToProviderRelation) {
 			defer wg.Done()
 
 			semaphore <- struct{}{}
@@ -724,7 +768,7 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 	return
 }
 
-func (w *providersMasterWorker) processProviderIP(ctx context.Context, sc db.StorageContractShort, log *slog.Logger) (result db.ProviderIP) {
+func (w *providersMasterWorker) processProviderIP(ctx context.Context, sc db.ContractToProviderRelation, log *slog.Logger) (result db.ProviderIP) {
 	result.PublicKey = sc.ProviderPublicKey
 
 	addr, err := address.ParseAddr(sc.Address)

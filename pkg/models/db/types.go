@@ -193,7 +193,7 @@ type ProviderWalletLT struct {
 	LT     uint64 `db:"last_tx_lt"`
 }
 
-type StorageContractShort struct {
+type ContractToProviderRelation struct {
 	ProviderPublicKey string `json:"provider_public_key"`
 	ProviderAddress   string `json:"provider_address"`
 	Address           string `json:"address"`

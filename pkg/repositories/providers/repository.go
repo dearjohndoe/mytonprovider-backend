@@ -29,8 +29,8 @@ type Repository interface {
 	AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error)
 	UpdateStatuses(ctx context.Context) (err error)
 	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
-	GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error)
-	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error)
+	GetStorageContracts(ctx context.Context) (contracts []db.ContractToProviderRelation, err error)
+	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error)
 	UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
@@ -661,7 +661,7 @@ func (r *repository) UpdateContractProofsChecks(ctx context.Context, contractsPr
 	return
 }
 
-func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error) {
+func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.ContractToProviderRelation, err error) {
 	query := `
 		SELECT 
 			p.public_key as provider_public_key,
@@ -684,7 +684,7 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.St
 
 	defer rows.Close()
 	for rows.Next() {
-		var contract db.StorageContractShort
+		var contract db.ContractToProviderRelation
 		if rErr := rows.Scan(&contract.ProviderPublicKey, &contract.ProviderAddress, &contract.Address, &contract.Size); rErr != nil {
 			err = rErr
 			return
@@ -700,7 +700,7 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.St
 	return
 }
 
-func (r *repository) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error) {
+func (r *repository) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error) {
 	if len(storageContracts) == 0 {
 		return
 	}
