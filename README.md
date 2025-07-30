@@ -105,3 +105,9 @@ The application runs several background workers:
 ## License
  
 Apache-2.0
+
+
+
+This project was created by order of a TON Foundation community member.
+Payments are received at:
+UQB0T1-iAtlArjW6feQb7SVuZFiDc_JjhqwWRFrzzh6yS0Q8

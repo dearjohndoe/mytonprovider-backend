@@ -105,3 +105,9 @@ PG_USER=pguser PG_PASSWORD=secret PG_DB=providerdb NEWFRONTENDUSER=jdfront NEWSU
 ## Лицензия
 
 Apache-2.0
+
+
+
+Этот проект был создан по заказу участника сообщества TON Foundation.
+Оплата была произведена по адресу:
+UQB0T1-iAtlArjW6feQb7SVuZFiDc_JjhqwWRFrzzh6yS0Q8
