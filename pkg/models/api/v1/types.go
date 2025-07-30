@@ -11,39 +11,41 @@ type SearchProvidersRequest struct {
 }
 
 type Sort struct {
-	Column string `json:"column,omitempty"` // "workingtime", "rating", "price", "uptime" or "maxSpan"
+	Column string `json:"column,omitempty"` // "workingtime", "rating", "price", "uptime" or "maxSpan", "location"
 	Order  string `json:"order,omitempty"`  // "asc" or "desc"
 }
 
 type FiltersRangeResp struct {
-	RegTimeDaysMax             int64   `json:"reg_time_days_max"`
-	MinSpanMin                 int64   `json:"min_span_min"`
-	MinSpanMax                 int64   `json:"min_span_max"`
-	MaxSpanMin                 int64   `json:"max_span_min"`
-	MaxSpanMax                 int64   `json:"max_span_max"`
-	MaxBagSizeMbMin            int64   `json:"max_bag_size_mb_min"`
-	MaxBagSizeMbMax            int64   `json:"max_bag_size_mb_max"`
-	TotalProviderSpaceMin      int64   `json:"total_provider_space_min"`
-	TotalProviderSpaceMax      int64   `json:"total_provider_space_max"`
-	UsedProviderSpaceMax       int64   `json:"used_provider_space_max"`
-	BenchmarkDiskReadSpeedMin  int64   `json:"benchmark_disk_read_speed_min"`
-	BenchmarkDiskReadSpeedMax  int64   `json:"benchmark_disk_read_speed_max"`
-	BenchmarkDiskWriteSpeedMin int64   `json:"benchmark_disk_write_speed_min"`
-	BenchmarkDiskWriteSpeedMax int64   `json:"benchmark_disk_write_speed_max"`
-	SpeedtestDownloadSpeedMin  int64   `json:"speedtest_download_min"`
-	SpeedtestDownloadSpeedMax  int64   `json:"speedtest_download_max"`
-	SpeedtestUploadSpeedMin    int64   `json:"speedtest_upload_min"`
-	SpeedtestUploadSpeedMax    int64   `json:"speedtest_upload_max"`
-	RatingMax                  float64 `json:"rating_max"`
-	PriceMax                   float64 `json:"price_max"`
-	CPUNumberMax               int32   `json:"cpu_number_max"`
-	SpeedtestPingMin           int32   `json:"speedtest_ping_min"`
-	SpeedtestPingMax           int32   `json:"speedtest_ping_max"`
-	TotalRamMin                float32 `json:"total_ram_min"`
-	TotalRamMax                float32 `json:"total_ram_max"`
+	Locations                  []string `json:"locations"`
+	RegTimeDaysMax             int64    `json:"reg_time_days_max"`
+	MinSpanMin                 int64    `json:"min_span_min"`
+	MinSpanMax                 int64    `json:"min_span_max"`
+	MaxSpanMin                 int64    `json:"max_span_min"`
+	MaxSpanMax                 int64    `json:"max_span_max"`
+	MaxBagSizeMbMin            int64    `json:"max_bag_size_mb_min"`
+	MaxBagSizeMbMax            int64    `json:"max_bag_size_mb_max"`
+	TotalProviderSpaceMin      int64    `json:"total_provider_space_min"`
+	TotalProviderSpaceMax      int64    `json:"total_provider_space_max"`
+	UsedProviderSpaceMax       int64    `json:"used_provider_space_max"`
+	BenchmarkDiskReadSpeedMin  int64    `json:"benchmark_disk_read_speed_min"`
+	BenchmarkDiskReadSpeedMax  int64    `json:"benchmark_disk_read_speed_max"`
+	BenchmarkDiskWriteSpeedMin int64    `json:"benchmark_disk_write_speed_min"`
+	BenchmarkDiskWriteSpeedMax int64    `json:"benchmark_disk_write_speed_max"`
+	SpeedtestDownloadSpeedMin  int64    `json:"speedtest_download_min"`
+	SpeedtestDownloadSpeedMax  int64    `json:"speedtest_download_max"`
+	SpeedtestUploadSpeedMin    int64    `json:"speedtest_upload_min"`
+	SpeedtestUploadSpeedMax    int64    `json:"speedtest_upload_max"`
+	RatingMax                  float64  `json:"rating_max"`
+	PriceMax                   float64  `json:"price_max"`
+	CPUNumberMax               int32    `json:"cpu_number_max"`
+	SpeedtestPingMin           int32    `json:"speedtest_ping_min"`
+	SpeedtestPingMax           int32    `json:"speedtest_ping_max"`
+	TotalRamMin                float32  `json:"total_ram_min"`
+	TotalRamMax                float32  `json:"total_ram_max"`
 }
 
 type Filters struct {
+	Location                  *string  `json:"location,omitempty"`
 	RatingGt                  *float64 `json:"rating_gt,omitempty"`
 	RatingLt                  *float64 `json:"rating_lt,omitempty"`
 	RegTimeDaysGt             *int64   `json:"reg_time_days_gt,omitempty"`

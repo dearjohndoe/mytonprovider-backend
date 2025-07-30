@@ -20,6 +20,7 @@ type ProviderFilters struct {
 	StorageGitHash               *string  `json:"storage_git_hash,omitempty"`
 	ProviderGitHash              *string  `json:"provider_git_hash,omitempty"`
 	CPUName                      *string  `json:"cpu_name,omitempty"`
+	Location                     *string  `json:"location,omitempty"`
 	Country                      *string  `json:"country,omitempty"`
 	ISP                          *string  `json:"isp,omitempty"`
 	RegTimeDaysGt                *int64   `json:"reg_time_days_gt,omitempty"`
@@ -138,6 +139,7 @@ type TelemetryDB struct {
 }
 
 type FiltersRange struct {
+	Locations                  []string
 	RegTimeDaysMax             int64
 	MinSpanMin                 int64
 	MinSpanMax                 int64

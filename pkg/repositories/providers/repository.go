@@ -145,6 +145,15 @@ func (r *repository) GetFiltersRange(ctx context.Context) (filtersRange db.Filte
 			MIN(p.max_bag_size_bytes / 1024 / 1024)::bigint as max_bag_size_mb_min,
 			MAX(p.max_bag_size_bytes / 1024 / 1024)::bigint as max_bag_size_mb_max,
 			COALESCE(MAX(p.rate_per_mb_per_day * 1024 * 200 * 30), 0.0) + 0.1 as price_max,
+			ARRAY(
+				SELECT DISTINCT
+					(p.ip_info->>'country') || ' (' || COALESCE(p.ip_info->>'country_iso', '') || ')'
+				FROM providers.providers p
+				WHERE p.ip_info IS NOT NULL
+					AND p.ip_info <> '{}'::jsonb
+					AND p.ip_info->>'country' IS NOT NULL
+					AND p.ip_info->>'country' <> ''
+			) AS locations,
 			
 			-- Telemetry ranges
 			COALESCE(MIN(t.total_provider_space), 0)::int as total_provider_space_min,
@@ -183,6 +192,7 @@ func (r *repository) GetFiltersRange(ctx context.Context) (filtersRange db.Filte
 		&filtersRange.MaxBagSizeMbMin,
 		&filtersRange.MaxBagSizeMbMax,
 		&filtersRange.PriceMax,
+		&filtersRange.Locations,
 
 		&filtersRange.TotalProviderSpaceMin,
 		&filtersRange.TotalProviderSpaceMax,
@@ -809,7 +819,6 @@ func (r *repository) GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, 
 		SELECT public_key, ip
 		FROM providers.providers
 		WHERE length(ip) > 0 AND (ip_info = '{}'::jsonb OR ip_info->>'ip' <> ip)
-		LIMIT 1
 	`
 
 	rows, err := r.db.Query(ctx, query)

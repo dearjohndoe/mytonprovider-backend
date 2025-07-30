@@ -79,6 +79,10 @@ func sortToCondition(sort db.ProviderSort) (condition string) {
 func filtersToCondition(filters db.ProviderFilters, args []any) (condition string, resArgs []any) {
 	resArgs = args
 
+	if filters.Location != nil && len(*filters.Location) > 0 {
+		resArgs = append(resArgs, *filters.Location)
+		condition += fmt.Sprintf(" AND p.ip_info->>'country' || ' (' || COALESCE(p.ip_info->>'country_iso', '') || ')' = $%d", len(resArgs))
+	}
 	if filters.RatingGt != nil {
 		condition += fmt.Sprintf(" AND p.rating >= %f", *filters.RatingGt)
 	}
