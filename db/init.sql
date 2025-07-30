@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS providers.providers
     port integer DEFAULT 0,
     status integer,
     status_ratio real NOT NULL DEFAULT 0,
+    ip_info jsonb DEFAULT '{}'::jsonb,
     CONSTRAINT providers_pkey PRIMARY KEY (public_key),
     CONSTRAINT providers_address_key UNIQUE (address)
 );

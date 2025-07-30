@@ -23,6 +23,10 @@ const (
 			p.min_span,
 			p.max_bag_size_bytes,
 			p.registered_at,
+			CASE
+				WHEN p.ip_info - 'ip' <> '{}'::jsonb THEN p.ip_info - 'ip'
+				ELSE NULL
+			END as location,
 			t.public_key is not null as is_send_telemetry,
 			t.storage_git_hash,
 			t.provider_git_hash,
@@ -75,6 +79,10 @@ func sortToCondition(sort db.ProviderSort) (condition string) {
 func filtersToCondition(filters db.ProviderFilters, args []any) (condition string, resArgs []any) {
 	resArgs = args
 
+	if filters.Location != nil && len(*filters.Location) > 0 {
+		resArgs = append(resArgs, *filters.Location)
+		condition += fmt.Sprintf(" AND p.ip_info->>'country' || ' (' || COALESCE(p.ip_info->>'country_iso', '') || ')' = $%d", len(resArgs))
+	}
 	if filters.RatingGt != nil {
 		condition += fmt.Sprintf(" AND p.rating >= %f", *filters.RatingGt)
 	}
@@ -229,6 +237,7 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 	for rows.Next() {
 		var regTime time.Time
 		var updatedAt *time.Time
+		var location *db.Location
 		var provider db.ProviderDB
 		if err := rows.Scan(
 			&provider.PubKey,
@@ -242,6 +251,7 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 			&provider.MinSpan,
 			&provider.MaxBagSizeBytes,
 			&regTime,
+			&location,
 			&provider.IsSendTelemetry,
 			&provider.Telemetry.StorageGitHash,
 			&provider.Telemetry.ProviderGitHash,
@@ -267,6 +277,10 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 		if updatedAt != nil {
 			u := uint64(updatedAt.Unix())
 			provider.Telemetry.UpdatedAt = &u
+		}
+
+		if location != nil {
+			provider.Location = location
 		}
 
 		provider.RegTime = uint64(regTime.Unix())

@@ -141,7 +141,7 @@ func (h *handler) getLatestTelemetry(c *fiber.Ctx) (err error) {
 }
 
 func (h *handler) health(c *fiber.Ctx) error {
-	return c.JSON(okHandler(c))
+	return okHandler(c)
 }
 
 func (h *handler) metrics(c *fiber.Ctx) error {

@@ -29,11 +29,14 @@ type Repository interface {
 	AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error)
 	UpdateStatuses(ctx context.Context) (err error)
 	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
-	GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error)
-	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error)
+	GetStorageContracts(ctx context.Context) (contracts []db.ContractToProviderRelation, err error)
+	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error)
 	UpdateProvidersLT(ctx context.Context, providers []db.ProviderWalletLT) (err error)
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
+
+	GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, err error)
+	UpdateProvidersIPInfo(ctx context.Context, ips []db.ProviderIPInfo) (err error)
 
 	CleanOldProvidersHistory(ctx context.Context, days int) (removed int, err error)
 	CleanOldStatusesHistory(ctx context.Context, days int) (removed int, err error)
@@ -55,6 +58,10 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			p.min_span,
 			p.max_bag_size_bytes,
 			p.registered_at,
+			CASE
+				WHEN p.ip_info - 'ip' <> '{}'::jsonb THEN p.ip_info - 'ip'
+				ELSE NULL
+			END as location,
 			t.public_key is not null as is_send_telemetry,
 			t.storage_git_hash,
 			t.provider_git_hash,
@@ -138,6 +145,15 @@ func (r *repository) GetFiltersRange(ctx context.Context) (filtersRange db.Filte
 			MIN(p.max_bag_size_bytes / 1024 / 1024)::bigint as max_bag_size_mb_min,
 			MAX(p.max_bag_size_bytes / 1024 / 1024)::bigint as max_bag_size_mb_max,
 			COALESCE(MAX(p.rate_per_mb_per_day * 1024 * 200 * 30), 0.0) + 0.1 as price_max,
+			ARRAY(
+				SELECT DISTINCT
+					(p.ip_info->>'country') || ' (' || COALESCE(p.ip_info->>'country_iso', '') || ')'
+				FROM providers.providers p
+				WHERE p.ip_info IS NOT NULL
+					AND p.ip_info <> '{}'::jsonb
+					AND p.ip_info->>'country' IS NOT NULL
+					AND p.ip_info->>'country' <> ''
+			) AS locations,
 			
 			-- Telemetry ranges
 			COALESCE(MIN(t.total_provider_space), 0)::int as total_provider_space_min,
@@ -176,6 +192,7 @@ func (r *repository) GetFiltersRange(ctx context.Context) (filtersRange db.Filte
 		&filtersRange.MaxBagSizeMbMin,
 		&filtersRange.MaxBagSizeMbMax,
 		&filtersRange.PriceMax,
+		&filtersRange.Locations,
 
 		&filtersRange.TotalProviderSpaceMin,
 		&filtersRange.TotalProviderSpaceMax,
@@ -661,7 +678,7 @@ func (r *repository) UpdateContractProofsChecks(ctx context.Context, contractsPr
 	return
 }
 
-func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error) {
+func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.ContractToProviderRelation, err error) {
 	query := `
 		SELECT 
 			p.public_key as provider_public_key,
@@ -684,7 +701,7 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.St
 
 	defer rows.Close()
 	for rows.Next() {
-		var contract db.StorageContractShort
+		var contract db.ContractToProviderRelation
 		if rErr := rows.Scan(&contract.ProviderPublicKey, &contract.ProviderAddress, &contract.Address, &contract.Size); rErr != nil {
 			err = rErr
 			return
@@ -700,7 +717,7 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.St
 	return
 }
 
-func (r *repository) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error) {
+func (r *repository) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error) {
 	if len(storageContracts) == 0 {
 		return
 	}
@@ -793,6 +810,67 @@ func (r *repository) AddProviders(ctx context.Context, providers []db.ProviderCr
 	`
 
 	_, err = r.db.Exec(ctx, query, providers)
+
+	return
+}
+
+func (r *repository) GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, err error) {
+	query := `
+		SELECT public_key, ip
+		FROM providers.providers
+		WHERE length(ip) > 0 AND (ip_info = '{}'::jsonb OR ip_info->>'ip' <> ip)
+	`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = nil
+		}
+
+		return
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		var ip db.ProviderIP
+		if rErr := rows.Scan(&ip.PublicKey, &ip.IP); rErr != nil {
+			err = rErr
+			return
+		}
+
+		ips = append(ips, ip)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func (r *repository) UpdateProvidersIPInfo(ctx context.Context, ips []db.ProviderIPInfo) (err error) {
+	if len(ips) == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE providers.providers p
+		SET ip_info = pi.ip_info
+		FROM (
+			SELECT
+				p->>'public_key' AS public_key,
+				(p->>'ip_info')::jsonb AS ip_info
+			FROM jsonb_array_elements($1::jsonb) AS p
+		) AS pi
+		WHERE p.public_key = pi.public_key
+	`
+
+	_, err = r.db.Exec(ctx, query, ips)
+	if err != nil {
+		err = fmt.Errorf("failed to update providers IP info: %w", err)
+		return
+	}
 
 	return
 }

@@ -7,6 +7,7 @@ const (
 	WorkingTimeColumn = "p.registered_at"
 	RatingColumn      = "p.rating"
 	PriceColumn       = "p.rate_per_mb_per_day"
+	LocationColumn    = "(p.ip_info->>'country' || ' (' || COALESCE(p.ip_info->>'country_iso', '') || ')', p.rating)"
 )
 
 var SortingMap = map[string]string{
@@ -15,6 +16,7 @@ var SortingMap = map[string]string{
 	"workingtime": WorkingTimeColumn,
 	"rating":      RatingColumn,
 	"price":       PriceColumn,
+	"location":    LocationColumn,
 }
 
 // Order constants

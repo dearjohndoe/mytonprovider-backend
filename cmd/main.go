@@ -14,11 +14,12 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	simpleCache "mytonprovider-backend/pkg/cache"
+	"mytonprovider-backend/pkg/clients/ifconfig"
+	tonclient "mytonprovider-backend/pkg/clients/ton"
 	"mytonprovider-backend/pkg/httpServer"
 	providersRepository "mytonprovider-backend/pkg/repositories/providers"
 	systemRepository "mytonprovider-backend/pkg/repositories/system"
 	"mytonprovider-backend/pkg/services/providers"
-	"mytonprovider-backend/pkg/tonclient"
 	"mytonprovider-backend/pkg/workers"
 	"mytonprovider-backend/pkg/workers/cleaner"
 	providersmaster "mytonprovider-backend/pkg/workers/providersMaster"
@@ -98,12 +99,14 @@ func run() (err error) {
 		workersRunDuration,
 	)
 
-	// TON
+	// Clients
 	ton, err := tonclient.NewClient(context.Background(), config.TON.ConfigURL, logger)
 	if err != nil {
 		logger.Error("failed to create TON client", slog.String("error", err.Error()))
 		return
 	}
+
+	ipinfo := ifconfig.NewClient(logger)
 
 	dhtClient, providerClient, err := newProviderClient(context.Background(), config.TON.ConfigURL, config.System.ADNLPort, config.System.Key)
 	if err != nil {
@@ -135,6 +138,7 @@ func run() (err error) {
 		ton,
 		providerClient,
 		dhtClient,
+		ipinfo,
 		config.TON.MasterAddress,
 		config.TON.BatchSize,
 		logger,

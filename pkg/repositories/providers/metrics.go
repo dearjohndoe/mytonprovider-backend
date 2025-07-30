@@ -181,7 +181,7 @@ func (m *metricsMiddleware) UpdateStatuses(ctx context.Context) (err error) {
 	return m.repo.UpdateStatuses(ctx)
 }
 
-func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts []db.StorageContractShort, err error) {
+func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts []db.ContractToProviderRelation, err error) {
 	defer func(s time.Time) {
 		labels := []string{
 			"GetStorageContracts", strconv.FormatBool(err != nil),
@@ -192,7 +192,7 @@ func (m *metricsMiddleware) GetStorageContracts(ctx context.Context) (contracts 
 	return m.repo.GetStorageContracts(ctx)
 }
 
-func (m *metricsMiddleware) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.StorageContractShort) (err error) {
+func (m *metricsMiddleware) UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error) {
 	defer func(s time.Time) {
 		labels := []string{
 			"UpdateRejectedStorageContracts", strconv.FormatBool(err != nil),
@@ -223,6 +223,28 @@ func (m *metricsMiddleware) AddProviders(ctx context.Context, providers []db.Pro
 		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
 	}(time.Now())
 	return m.repo.AddProviders(ctx, providers)
+}
+
+func (m *metricsMiddleware) GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"GetProvidersIPs", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.GetProvidersIPs(ctx)
+}
+
+func (m *metricsMiddleware) UpdateProvidersIPInfo(ctx context.Context, ips []db.ProviderIPInfo) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"UpdateProvidersIPInfo", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.UpdateProvidersIPInfo(ctx, ips)
 }
 
 func (m *metricsMiddleware) CleanOldProvidersHistory(ctx context.Context, days int) (removed int, err error) {

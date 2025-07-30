@@ -61,6 +61,7 @@ func (s *service) GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersR
 	}
 
 	filtersRange = v1.FiltersRangeResp{
+		Locations:                  r.Locations,
 		RatingMax:                  r.RatingMax,
 		RegTimeDaysMax:             r.RegTimeDaysMax,
 		PriceMax:                   r.PriceMax,
@@ -155,6 +156,16 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			updatedAt = *provider.Telemetry.UpdatedAt
 		}
 
+		var location *v1.Location
+		if provider.Location != nil {
+			location = &v1.Location{
+				Country:    provider.Location.Country,
+				CountryISO: provider.Location.CountryISO,
+				City:       provider.Location.City,
+				TimeZone:   provider.Location.TimeZone,
+			}
+		}
+
 		providers = append(providers, v1.Provider{
 			PubKey:          provider.PubKey,
 			Address:         provider.Address,
@@ -169,6 +180,7 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			MaxBagSizeBytes: provider.MaxBagSizeBytes,
 			RegTime:         provider.RegTime,
 			IsSendTelemetry: provider.IsSendTelemetry,
+			Location:        location,
 			Telemetry: v1.Telemetry{
 				UpdatedAt:               &updatedAt,
 				StorageGitHash:          provider.Telemetry.StorageGitHash,
@@ -197,6 +209,7 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 
 func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters, db.ProviderSort, int, int) {
 	filters := db.ProviderFilters{
+		Location:                     req.Filters.Location,
 		RatingGt:                     req.Filters.RatingGt,
 		RatingLt:                     req.Filters.RatingLt,
 		RegTimeDaysGt:                req.Filters.RegTimeDaysGt,

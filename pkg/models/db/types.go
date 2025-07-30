@@ -20,6 +20,7 @@ type ProviderFilters struct {
 	StorageGitHash               *string  `json:"storage_git_hash,omitempty"`
 	ProviderGitHash              *string  `json:"provider_git_hash,omitempty"`
 	CPUName                      *string  `json:"cpu_name,omitempty"`
+	Location                     *string  `json:"location,omitempty"`
 	Country                      *string  `json:"country,omitempty"`
 	ISP                          *string  `json:"isp,omitempty"`
 	RegTimeDaysGt                *int64   `json:"reg_time_days_gt,omitempty"`
@@ -138,6 +139,7 @@ type TelemetryDB struct {
 }
 
 type FiltersRange struct {
+	Locations                  []string
 	RegTimeDaysMax             int64
 	MinSpanMin                 int64
 	MinSpanMax                 int64
@@ -166,20 +168,28 @@ type FiltersRange struct {
 }
 
 type ProviderDB struct {
-	Status      *uint32 `json:"status"`
-	PubKey      string  `json:"public_key"`
-	Address     string  `json:"address"`
-	UpTime      float32 `json:"uptime"`
-	Rating      float32 `json:"rating"`
-	StatusRatio float32 `json:"status_ratio"`
-	MaxSpan     uint32  `json:"max_span"`
-	Price       uint64  `json:"price"`
+	Location    *Location `json:"location"`
+	Status      *uint32   `json:"status"`
+	PubKey      string    `json:"public_key"`
+	Address     string    `json:"address"`
+	UpTime      float32   `json:"uptime"`
+	Rating      float32   `json:"rating"`
+	StatusRatio float32   `json:"status_ratio"`
+	MaxSpan     uint32    `json:"max_span"`
+	Price       uint64    `json:"price"`
 
 	MinSpan         uint32      `json:"min_span"`
 	MaxBagSizeBytes uint64      `json:"max_bag_size_bytes"`
 	RegTime         uint64      `json:"registered_at"`
 	IsSendTelemetry bool        `json:"is_send_telemetry"`
 	Telemetry       TelemetryDB `json:"telemetry"`
+}
+
+type Location struct {
+	Country    string `json:"country"`
+	CountryISO string `json:"country_iso"`
+	City       string `json:"city"`
+	TimeZone   string `json:"time_zone"`
 }
 
 type ProviderWallet struct {
@@ -193,7 +203,7 @@ type ProviderWalletLT struct {
 	LT     uint64 `db:"last_tx_lt"`
 }
 
-type StorageContractShort struct {
+type ContractToProviderRelation struct {
 	ProviderPublicKey string `json:"provider_public_key"`
 	ProviderAddress   string `json:"provider_address"`
 	Address           string `json:"address"`
@@ -214,6 +224,11 @@ type ProviderIP struct {
 	PublicKey string `json:"public_key"`
 	IP        string `json:"ip"`
 	Port      int32  `json:"port"`
+}
+
+type ProviderIPInfo struct {
+	PublicKey string `json:"public_key"`
+	IPInfo    string `json:"ip_info"`
 }
 
 type ContractProofsCheck struct {

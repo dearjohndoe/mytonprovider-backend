@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// Test example
 func Test_GetTransactions(t *testing.T) {
 	ctx := context.Background()
 
