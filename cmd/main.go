@@ -107,10 +107,6 @@ func run() (err error) {
 	}
 
 	ipinfo := ifconfig.NewClient(logger)
-	if err != nil {
-		logger.Error("failed to create IP info client", slog.String("error", err.Error()))
-		return
-	}
 
 	dhtClient, providerClient, err := newProviderClient(context.Background(), config.TON.ConfigURL, config.System.ADNLPort, config.System.Key)
 	if err != nil {
