@@ -33,6 +33,7 @@ func (w *worker) Start(ctx context.Context) (err error) {
 	go w.run(ctx, "StoreProof", w.providersMaster.StoreProof)
 	go w.run(ctx, "UpdateUptime", w.providersMaster.UpdateUptime)
 	go w.run(ctx, "UpdateRating", w.providersMaster.UpdateRating)
+	go w.run(ctx, "UpdateIPInfo", w.providersMaster.UpdateIPInfo)
 
 	go w.run(ctx, "CleanupOldData", w.cleaner.CleanupOldData)
 

@@ -35,6 +35,9 @@ type Repository interface {
 	UpdateProviders(ctx context.Context, providers []db.ProviderUpdate) (err error)
 	AddProviders(ctx context.Context, providers []db.ProviderCreate) (err error)
 
+	GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, err error)
+	UpdateProvidersIPInfo(ctx context.Context, ips []db.ProviderIPInfo) (err error)
+
 	CleanOldProvidersHistory(ctx context.Context, days int) (removed int, err error)
 	CleanOldStatusesHistory(ctx context.Context, days int) (removed int, err error)
 	CleanOldBenchmarksHistory(ctx context.Context, days int) (removed int, err error)
@@ -793,6 +796,68 @@ func (r *repository) AddProviders(ctx context.Context, providers []db.ProviderCr
 	`
 
 	_, err = r.db.Exec(ctx, query, providers)
+
+	return
+}
+
+func (r *repository) GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, err error) {
+	query := `
+		SELECT public_key, ip
+		FROM providers.providers
+		WHERE length(ip) > 0 AND (ip_info = '{}'::jsonb OR ip_info->>'ip' <> ip)
+		LIMIT 1
+	`
+
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			err = nil
+		}
+
+		return
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		var ip db.ProviderIP
+		if rErr := rows.Scan(&ip.PublicKey, &ip.IP); rErr != nil {
+			err = rErr
+			return
+		}
+
+		ips = append(ips, ip)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func (r *repository) UpdateProvidersIPInfo(ctx context.Context, ips []db.ProviderIPInfo) (err error) {
+	if len(ips) == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE providers.providers p
+		SET ip_info = pi.ip_info
+		FROM (
+			SELECT
+				p->>'public_key' AS public_key,
+				(p->>'ip_info')::jsonb AS ip_info
+			FROM jsonb_array_elements($1::jsonb) AS p
+		) AS pi
+		WHERE p.public_key = pi.public_key
+	`
+
+	_, err = r.db.Exec(ctx, query, ips)
+	if err != nil {
+		err = fmt.Errorf("failed to update providers IP info: %w", err)
+		return
+	}
 
 	return
 }

@@ -216,6 +216,11 @@ type ProviderIP struct {
 	Port      int32  `json:"port"`
 }
 
+type ProviderIPInfo struct {
+	PublicKey string `json:"public_key"`
+	IPInfo    string `json:"ip_info"`
+}
+
 type ContractProofsCheck struct {
 	Address         string    `json:"address"`
 	ProviderAddress string    `json:"provider_address"`

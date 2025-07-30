@@ -225,6 +225,28 @@ func (m *metricsMiddleware) AddProviders(ctx context.Context, providers []db.Pro
 	return m.repo.AddProviders(ctx, providers)
 }
 
+func (m *metricsMiddleware) GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"GetProvidersIPs", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.GetProvidersIPs(ctx)
+}
+
+func (m *metricsMiddleware) UpdateProvidersIPInfo(ctx context.Context, ips []db.ProviderIPInfo) (err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"UpdateProvidersIPInfo", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.UpdateProvidersIPInfo(ctx, ips)
+}
+
 func (m *metricsMiddleware) CleanOldProvidersHistory(ctx context.Context, days int) (removed int, err error) {
 	defer func(s time.Time) {
 		labels := []string{
