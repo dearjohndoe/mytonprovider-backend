@@ -155,6 +155,16 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			updatedAt = *provider.Telemetry.UpdatedAt
 		}
 
+		var location *v1.Location
+		if provider.Location != nil {
+			location = &v1.Location{
+				Country:    provider.Location.Country,
+				CountryISO: provider.Location.CountryISO,
+				City:       provider.Location.City,
+				TimeZone:   provider.Location.TimeZone,
+			}
+		}
+
 		providers = append(providers, v1.Provider{
 			PubKey:          provider.PubKey,
 			Address:         provider.Address,
@@ -169,6 +179,7 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			MaxBagSizeBytes: provider.MaxBagSizeBytes,
 			RegTime:         provider.RegTime,
 			IsSendTelemetry: provider.IsSendTelemetry,
+			Location:        location,
 			Telemetry: v1.Telemetry{
 				UpdatedAt:               &updatedAt,
 				StorageGitHash:          provider.Telemetry.StorageGitHash,

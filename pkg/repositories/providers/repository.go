@@ -58,6 +58,10 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			p.min_span,
 			p.max_bag_size_bytes,
 			p.registered_at,
+			CASE
+				WHEN p.ip_info - 'ip' <> '{}'::jsonb THEN p.ip_info - 'ip'
+				ELSE NULL
+			END as location,
 			t.public_key is not null as is_send_telemetry,
 			t.storage_git_hash,
 			t.provider_git_hash,

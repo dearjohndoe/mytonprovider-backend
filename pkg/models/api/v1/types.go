@@ -233,21 +233,29 @@ type Telemetry struct {
 }
 
 type Provider struct {
-	Status      *uint32 `json:"status"`
-	PubKey      string  `json:"pubkey"`
-	Address     string  `json:"address"`
-	UpTime      float32 `json:"uptime"`
-	StatusRatio float32 `json:"status_ratio"`
-	WorkingTime uint64  `json:"working_time"`
-	Rating      float32 `json:"rating"`
-	MaxSpan     uint32  `json:"max_span"`
-	Price       uint64  `json:"price"`
+	Location    *Location `json:"location"`
+	Status      *uint32   `json:"status"`
+	PubKey      string    `json:"pubkey"`
+	Address     string    `json:"address"`
+	UpTime      float32   `json:"uptime"`
+	StatusRatio float32   `json:"status_ratio"`
+	WorkingTime uint64    `json:"working_time"`
+	Rating      float32   `json:"rating"`
+	MaxSpan     uint32    `json:"max_span"`
+	Price       uint64    `json:"price"`
 
 	MinSpan         uint32    `json:"min_span"`
 	MaxBagSizeBytes uint64    `json:"max_bag_size_bytes"`
 	RegTime         uint64    `json:"reg_time"`
 	IsSendTelemetry bool      `json:"is_send_telemetry"`
 	Telemetry       Telemetry `json:"telemetry"`
+}
+
+type Location struct {
+	Country    string `json:"country"`
+	CountryISO string `json:"country_iso"`
+	City       string `json:"city"`
+	TimeZone   string `json:"time_zone"`
 }
 
 type ProvidersResponse struct {
