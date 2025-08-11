@@ -7,11 +7,12 @@ toolchain go1.23.9
 require (
 	github.com/gofiber/fiber/v2 v2.52.8
 	github.com/jackc/pgx/v5 v5.7.5
-	github.com/xssnick/tonutils-go v1.13.0
-	github.com/xssnick/tonutils-storage-provider v0.3.7
+	github.com/xssnick/tonutils-go v1.14.0
+	github.com/xssnick/tonutils-storage-provider v0.3.11
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -19,7 +20,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/oasisprotocol/curve25519-voi v0.0.0-20230904125328-1f23a7beb09a // indirect
 	github.com/philhofer/fwd v1.1.3-0.20240916144458-20a13a1f6b7c // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
