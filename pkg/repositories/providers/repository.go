@@ -54,7 +54,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			COALESCE(p.uptime, 0) * 100 as uptime,
 			COALESCE(p.rating, 0) as rating,
 			p.max_span,
-			p.rate_per_mb_per_day * 1024 * 200 * 30 as price,
+			p.rate_per_mb_per_day * 1024 * 200 * 30 as price, -- NanoTON per 200GB per month
 			p.min_span,
 			p.max_bag_size_bytes,
 			p.registered_at,

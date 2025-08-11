@@ -20,8 +20,13 @@ func errorHandler(c *fiber.Ctx, err error) error {
 	}
 
 	if appErr, ok := err.(*models.AppError); ok {
+		msg := appErr.Message
+		if appErr.Code > 500 {
+			msg = "internal server error"
+		}
+
 		return c.Status(appErr.Code).JSON(fiber.Map{
-			"error": appErr.Message,
+			"error": msg,
 		})
 	}
 

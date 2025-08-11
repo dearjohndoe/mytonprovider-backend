@@ -19,7 +19,7 @@ const (
 			p.uptime * 100 as uptime,
 			p.rating,
 			p.max_span,
-			p.rate_per_mb_per_day * 1024 * 200 * 30 as price,
+			p.rate_per_mb_per_day * 1024 * 200 * 30 as price, -- NanoTON per 200GB per month
 			p.min_span,
 			p.max_bag_size_bytes,
 			p.registered_at,

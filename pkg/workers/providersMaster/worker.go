@@ -21,6 +21,7 @@ import (
 	"mytonprovider-backend/pkg/clients/ifconfig"
 	tonclient "mytonprovider-backend/pkg/clients/ton"
 	"mytonprovider-backend/pkg/models/db"
+	"mytonprovider-backend/pkg/utils"
 )
 
 const (
@@ -28,6 +29,7 @@ const (
 	invalidAddress              = 1
 	invalidProviderPublicKey    = 2
 	invalidStorageProofResponse = 3
+	verifyStorageRetries        = 3
 	invalidSize                 = 4
 	unavailableProvider         = 500
 )
@@ -39,7 +41,8 @@ const (
 	maxConcurrentProviderChecks   = 10
 	fakeSize                      = 1
 	providerResponseTimeout       = 5 * time.Second
-	providerCheckTimeout          = 20 * time.Second
+	providerCheckTimeout          = 10 * time.Second
+	ipInfoTimeout                 = 10 * time.Second
 )
 
 type providers interface {
@@ -521,22 +524,31 @@ func (w *providersMasterWorker) UpdateIPInfo(ctx context.Context) (interval time
 	for _, ip := range ips {
 		time.Sleep(1 * time.Second)
 
-		info, err := w.ipinfo.GetIPInfo(ctx, ip.IP)
-		if err != nil {
-			log.Error("failed to get IP info", "ip", ip.IP, "error", err)
+		ipErr := func() error {
+			timeoutCtx, cancel := context.WithTimeout(ctx, ipInfoTimeout)
+			defer cancel()
+
+			info, err := w.ipinfo.GetIPInfo(timeoutCtx, ip.IP)
+			if err != nil {
+				return fmt.Errorf("failed to get IP info: %w", err)
+			}
+
+			s, err := json.Marshal(info)
+			if err != nil {
+				return fmt.Errorf("failed to marshal IP info: %w, ip: %s, info: %s", err, ip.IP, info)
+			}
+
+			ipsInfo = append(ipsInfo, db.ProviderIPInfo{
+				PublicKey: ip.PublicKey,
+				IPInfo:    string(s),
+			})
+
+			return nil
+		}()
+		if ipErr != nil {
+			log.Error(ipErr.Error())
 			continue
 		}
-
-		s, err := json.Marshal(info)
-		if err != nil {
-			log.Error("failed to marshal IP info", "ip", ip.IP, "error", err)
-			continue
-		}
-
-		ipsInfo = append(ipsInfo, db.ProviderIPInfo{
-			PublicKey: ip.PublicKey,
-			IPInfo:    string(s),
-		})
 	}
 
 	err = w.providers.UpdateProvidersIPInfo(ctx, ipsInfo)
@@ -853,7 +865,11 @@ func (w *providersMasterWorker) processProviderIP(ctx context.Context, sc db.Con
 	timeoutCtx, cancel := context.WithTimeout(ctx, providerCheckTimeout)
 	defer cancel()
 
-	proof, err := w.providerClient.VerifyStorageADNLProof(timeoutCtx, pk, addr)
+	var proof []byte
+	err = utils.TryNTimes(func() (cErr error) {
+		proof, cErr = w.providerClient.VerifyStorageADNLProof(timeoutCtx, pk, addr)
+		return
+	}, verifyStorageRetries)
 	if err != nil {
 		log.Error("failed to verify storage adnl proof", "provider", sc.ProviderPublicKey, "error", err)
 		return result
