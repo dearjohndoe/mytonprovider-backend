@@ -11,9 +11,9 @@ import (
 
 type providers interface {
 	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) ([]v1.Provider, error)
-	GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error)
+	GetLatestTelemetry(ctx context.Context) (providers []interface{}, err error)
 	GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error)
-	UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest) (err error)
+	UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest, rawBody []byte) (err error)
 	UpdateBenchmarks(ctx context.Context, benchmark v1.BenchmarksRequest) (err error)
 }
 

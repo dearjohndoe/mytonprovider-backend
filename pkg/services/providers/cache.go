@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -40,29 +41,28 @@ func (c *cacheMiddleware) GetFiltersRange(ctx context.Context) (filtersRange v1.
 	return c.actualFiltersRange(ctx)
 }
 
-func (c *cacheMiddleware) GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error) {
+func (c *cacheMiddleware) GetLatestTelemetry(ctx context.Context) (providers []interface{}, err error) {
 	data := c.latestTelemetryBuffer.GetAll()
 	if len(data) == 0 {
 		return
 	}
 
-	providers = make([]v1.TelemetryRequest, 0, len(data))
+	providers = make([]interface{}, 0, len(data))
 	for _, v := range data {
-		if telemetry, ok := v.(v1.TelemetryRequest); ok {
-			telemetryCopy, copyErr := utils.DeepCopy(telemetry)
-			if copyErr != nil {
-				continue
+		if telemetry, ok := v.([]byte); ok {
+			var telemetryCopy interface{}
+			err := json.Unmarshal(telemetry, &telemetryCopy)
+			if err == nil {
+				providers = append(providers, telemetryCopy)
 			}
-
-			providers = append(providers, telemetryCopy)
 		}
 	}
 
 	return
 }
 
-func (c *cacheMiddleware) UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest) (err error) {
-	err = c.svc.UpdateTelemetry(ctx, telemetry)
+func (c *cacheMiddleware) UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest, rawBody []byte) (err error) {
+	err = c.svc.UpdateTelemetry(ctx, telemetry, rawBody)
 	if err != nil {
 		return
 	}
@@ -74,7 +74,7 @@ func (c *cacheMiddleware) UpdateTelemetry(ctx context.Context, telemetry v1.Tele
 
 	key := strings.ToLower(telemetry.Storage.Provider.PubKey)
 	c.telemetryBuffer.Set(key, telemetryCopy)
-	c.latestTelemetryBuffer.Set(key, telemetryCopy)
+	c.latestTelemetryBuffer.Set(key, rawBody)
 
 	return
 }

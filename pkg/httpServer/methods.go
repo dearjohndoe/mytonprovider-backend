@@ -89,7 +89,7 @@ func (h *handler) updateTelemetry(c *fiber.Ctx) (err error) {
 
 	req.XRealIP = c.Get("X-Real-IP")
 
-	err = h.providers.UpdateTelemetry(c.Context(), req)
+	err = h.providers.UpdateTelemetry(c.Context(), req, body)
 	if err != nil {
 		return errorHandler(c, err)
 	}

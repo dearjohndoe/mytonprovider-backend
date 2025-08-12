@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"mytonprovider-backend/pkg/constants"
 	"mytonprovider-backend/pkg/models"
@@ -13,7 +14,8 @@ import (
 )
 
 const (
-	maxProvidersLimit = 1000
+	maxProvidersLimit  = 1000
+	telemetryBodyLimit = 5000
 )
 
 type service struct {
@@ -29,9 +31,9 @@ type providers interface {
 
 type Providers interface {
 	SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error)
-	GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error)
+	GetLatestTelemetry(ctx context.Context) (providers []interface{}, err error)
 	GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error)
-	UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest) (err error)
+	UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest, rawBody []byte) (err error)
 	UpdateBenchmarks(ctx context.Context, benchmark v1.BenchmarksRequest) (err error)
 }
 
@@ -48,7 +50,7 @@ func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersReq
 	return
 }
 
-func (s *service) GetLatestTelemetry(ctx context.Context) (providers []v1.TelemetryRequest, err error) {
+func (s *service) GetLatestTelemetry(ctx context.Context) (providers []interface{}, err error) {
 	// logic in cache middleware
 
 	return
@@ -92,9 +94,13 @@ func (s *service) GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersR
 	return
 }
 
-func (s *service) UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest) (err error) {
+func (s *service) UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest, rawBody []byte) (err error) {
 	if telemetry.Storage.Provider.PubKey == "" {
 		return models.NewAppError(models.BadRequestErrorCode, "")
+	}
+
+	if utf8.RuneCount(rawBody) > telemetryBodyLimit {
+		return models.NewAppError(models.BadRequestErrorCode, "request body too large")
 	}
 
 	// logic in cache middleware
