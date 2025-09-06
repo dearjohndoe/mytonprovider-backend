@@ -28,6 +28,7 @@ type Repository interface {
 	GetAllProvidersWallets(ctx context.Context) (wallets []db.ProviderWallet, err error)
 	AddStorageContracts(ctx context.Context, contracts []db.StorageContract) (err error)
 	UpdateStatuses(ctx context.Context) (err error)
+	GetStorageContractsChecks(ctx context.Context, contracts []string) (resp []db.ContractCheck, err error)
 	UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error)
 	GetStorageContracts(ctx context.Context) (contracts []db.ContractToProviderRelation, err error)
 	UpdateRejectedStorageContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation) (err error)
@@ -652,6 +653,36 @@ func (r *repository) UpdateStatuses(ctx context.Context) (err error) {
 
 	_, err = r.db.Exec(ctx, query)
 
+	return
+}
+
+func (r *repository) GetStorageContractsChecks(ctx context.Context, contracts []string) (resp []db.ContractCheck, err error) {
+	query := `
+		SELECT 
+			sc.address, 
+			p.public_key, 
+			sc.reason, 
+			sc.reason_timestamp
+		FROM providers.storage_contracts sc
+			JOIN providers.providers p ON p.address = sc.provider_address
+		WHERE sc.address = ANY($1::text[]);`
+
+	rows, err := r.db.Query(ctx, query, contracts)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var contract db.ContractCheck
+		if rErr := rows.Scan(&contract.Address, &contract.ProviderPublicKey, &contract.Reason, &contract.ReasonTimestamp); rErr != nil {
+			err = rErr
+			return
+		}
+		resp = append(resp, contract)
+	}
+
+	err = rows.Err()
 	return
 }
 

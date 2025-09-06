@@ -15,6 +15,7 @@ type providers interface {
 	GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error)
 	UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest, rawBody []byte) (err error)
 	UpdateBenchmarks(ctx context.Context, benchmark v1.BenchmarksRequest) (err error)
+	GetStorageContractsChecks(ctx context.Context, req v1.ContractsStatusesRequest) ([]v1.ContractCheck, error)
 }
 
 type errorResponse struct {

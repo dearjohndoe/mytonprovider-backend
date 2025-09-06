@@ -33,11 +33,18 @@ func (h *handler) RegisterRoutes() {
 
 	apiv1 := h.server.Group("/api/v1", h.loggerMiddleware)
 	{
-		providers := apiv1.Group("/providers")
-		providers.Post("/search", h.searchProviders)
-		providers.Get("/filters", h.filtersRange)
-		providers.Post("", h.updateTelemetry)
-		providers.Get("", h.authorizationMiddleware, h.getLatestTelemetry)
+		{
+			providers := apiv1.Group("/providers")
+			providers.Post("/search", h.searchProviders)
+			providers.Get("/filters", h.filtersRange)
+			providers.Post("", h.updateTelemetry)
+			providers.Get("", h.authorizationMiddleware, h.getLatestTelemetry)
+		}
+
+		{
+			contracts := apiv1.Group("/contracts")
+			contracts.Post("/statuses", h.getStorageContractsStatuses)
+		}
 
 		apiv1.Post("/benchmarks", h.updateBenchmarks)
 	}

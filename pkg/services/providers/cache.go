@@ -94,6 +94,10 @@ func (c *cacheMiddleware) UpdateBenchmarks(ctx context.Context, benchmark v1.Ben
 	return
 }
 
+func (c *cacheMiddleware) GetStorageContractsChecks(ctx context.Context, req v1.ContractsStatusesRequest) ([]v1.ContractCheck, error) {
+	return c.svc.GetStorageContractsChecks(ctx, req)
+}
+
 func (c *cacheMiddleware) actualFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error) {
 	filtersRange, err = c.svc.GetFiltersRange(ctx)
 	if err != nil {

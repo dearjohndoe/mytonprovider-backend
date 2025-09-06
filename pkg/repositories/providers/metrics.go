@@ -82,6 +82,17 @@ func (m *metricsMiddleware) AddStatuses(ctx context.Context, providers []db.Prov
 	return m.repo.AddStatuses(ctx, providers)
 }
 
+func (m *metricsMiddleware) GetStorageContractsChecks(ctx context.Context, contracts []string) (resp []db.ContractCheck, err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"GetStorageContractsChecks", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.GetStorageContractsChecks(ctx, contracts)
+}
+
 func (m *metricsMiddleware) UpdateContractProofsChecks(ctx context.Context, contractsProofs []db.ContractProofsCheck) (err error) {
 	defer func(s time.Time) {
 		labels := []string{
