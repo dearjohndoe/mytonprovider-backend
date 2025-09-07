@@ -27,6 +27,7 @@ type providers interface {
 	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) ([]db.ProviderDB, error)
 	GetFiltersRange(ctx context.Context) (db.FiltersRange, error)
 	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) ([]db.ProviderDB, error)
+	GetStorageContractsChecks(ctx context.Context, contracts []string) ([]db.ContractCheck, error)
 }
 
 type Providers interface {
@@ -35,6 +36,7 @@ type Providers interface {
 	GetFiltersRange(ctx context.Context) (filtersRange v1.FiltersRangeResp, err error)
 	UpdateTelemetry(ctx context.Context, telemetry v1.TelemetryRequest, rawBody []byte) (err error)
 	UpdateBenchmarks(ctx context.Context, benchmark v1.BenchmarksRequest) (err error)
+	GetStorageContractsChecks(ctx context.Context, req v1.ContractsStatusesRequest) ([]v1.ContractCheck, error)
 }
 
 func (s *service) SearchProviders(ctx context.Context, req v1.SearchProvidersRequest) (providers []v1.Provider, err error) {
@@ -284,6 +286,44 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 	}
 
 	return filters, sort, limit, offset
+}
+
+func (s *service) GetStorageContractsChecks(ctx context.Context, req v1.ContractsStatusesRequest) ([]v1.ContractCheck, error) {
+	log := s.logger.With(slog.String("method", "GetStorageContractsChecks"))
+
+	if len(req.Contracts) == 0 {
+		log.Debug("empty statuses list")
+		return []v1.ContractCheck{}, nil
+	}
+
+	if len(req.Contracts) > 1000 {
+		log.Error("too many statuses in request")
+		return nil, models.NewAppError(models.BadRequestErrorCode, "too many statuses in request")
+	}
+
+	dbReasons, err := s.providers.GetStorageContractsChecks(ctx, req.Contracts)
+	if err != nil {
+		log.Error("failed to get storage contracts reasons", slog.String("error", err.Error()))
+		return nil, models.NewAppError(models.InternalServerErrorCode, "")
+	}
+
+	reasons := make([]v1.ContractCheck, 0, len(dbReasons))
+	for _, dbReason := range dbReasons {
+		reason := v1.ContractCheck{
+			Address:           dbReason.Address,
+			ProviderPublicKey: dbReason.ProviderPublicKey,
+			Reason:            dbReason.Reason,
+		}
+
+		if dbReason.ReasonTimestamp != nil {
+			timestamp := dbReason.ReasonTimestamp.Unix()
+			reason.ReasonTimestamp = &timestamp
+		}
+
+		reasons = append(reasons, reason)
+	}
+
+	return reasons, nil
 }
 
 func NewService(

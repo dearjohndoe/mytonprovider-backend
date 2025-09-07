@@ -237,3 +237,10 @@ type ContractProofsCheck struct {
 	Reason          uint32    `json:"reason"`
 	Timestamp       time.Time `json:"timestamp"`
 }
+
+type ContractCheck struct {
+	Address           string
+	ProviderPublicKey string
+	ReasonTimestamp   *time.Time
+	Reason            *uint32
+}

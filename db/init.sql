@@ -114,6 +114,10 @@ CREATE TABLE IF NOT EXISTS providers.storage_contracts
     CONSTRAINT storage_contracts_pkey PRIMARY KEY (address, provider_address)
 );
 
+CREATE INDEX IF NOT EXISTS idx_storage_contracts_address
+    ON providers.storage_contracts USING btree
+    (address COLLATE pg_catalog."default");
+
 CREATE TABLE IF NOT EXISTS providers.storage_contracts_history
 (
     address character varying(64) COLLATE pg_catalog."default" NOT NULL,

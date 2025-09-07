@@ -269,3 +269,18 @@ type TelemetryResponse struct {
 	PubKey    string    `json:"pubkey"`
 	Telemetry Telemetry `json:"telemetry"`
 }
+
+type ContractsStatusesRequest struct {
+	Contracts []string `json:"contracts"`
+}
+
+type ContractCheck struct {
+	Address           string  `json:"address"`
+	ProviderPublicKey string  `json:"provider_pubkey"`
+	Reason            *uint32 `json:"reason"`
+	ReasonTimestamp   *int64  `json:"reason_timestamp"` // Unix timestamp
+}
+
+type ContractsStatusesResponse struct {
+	Contracts []ContractCheck `json:"contracts"`
+}

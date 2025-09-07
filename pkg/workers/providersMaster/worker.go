@@ -499,7 +499,7 @@ func (w *providersMasterWorker) UpdateRating(ctx context.Context) (interval time
 
 func (w *providersMasterWorker) UpdateIPInfo(ctx context.Context) (interval time.Duration, err error) {
 	const (
-		successInterval = 120 * time.Minute
+		successInterval = 240 * time.Minute
 		failureInterval = 30 * time.Second
 	)
 

@@ -17,7 +17,6 @@ import (
 )
 
 const (
-	tspPrefix           = "tsp-"
 	getProvidersRetries = 5
 	retries             = 20
 	batch               = 100

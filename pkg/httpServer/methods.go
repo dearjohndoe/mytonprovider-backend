@@ -140,6 +140,35 @@ func (h *handler) getLatestTelemetry(c *fiber.Ctx) (err error) {
 	})
 }
 
+func (h *handler) getStorageContractsStatuses(c *fiber.Ctx) (err error) {
+	body := c.Body()
+	log := h.logger.With(
+		slog.String("method", "getStorageContractsStatuses"),
+		slog.String("method", c.Method()),
+		slog.String("url", c.OriginalURL()),
+		slog.Any("headers", c.GetReqHeaders()),
+		slog.Int("body_length", len(body)),
+		slog.String("body", string(body)),
+	)
+
+	var req v1.ContractsStatusesRequest
+	err = json.Unmarshal(c.Body(), &req)
+	if err != nil {
+		log.Error("failed to parse contracts statuses body", slog.String("error", err.Error()))
+		err = fiber.NewError(fiber.StatusBadRequest, "invalid request body")
+		return errorHandler(c, err)
+	}
+
+	reasons, err := h.providers.GetStorageContractsChecks(c.Context(), req)
+	if err != nil {
+		return errorHandler(c, err)
+	}
+
+	return c.JSON(v1.ContractsStatusesResponse{
+		Contracts: reasons,
+	})
+}
+
 func (h *handler) health(c *fiber.Ctx) error {
 	return okHandler(c)
 }
