@@ -92,11 +92,22 @@ func run() (err error) {
 		[]string{"method", "error"},
 	)
 
+	providersNetLoad := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: config.Metrics.Namespace,
+			Subsystem: config.Metrics.DbSubsystem,
+			Name:      "providers_net_load",
+			Help:      "Providers network load",
+		},
+		[]string{"provider_pubkey", "type"},
+	)
+
 	prometheus.MustRegister(
 		dbRequestsCount,
 		dbRequestsDuration,
 		workersRunCount,
 		workersRunDuration,
+		providersNetLoad,
 	)
 
 	// Clients
@@ -129,7 +140,7 @@ func run() (err error) {
 	systemRepo = systemRepository.NewMetrics(dbRequestsCount, dbRequestsDuration, systemRepo)
 
 	// Workers
-	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache, benchmarksCache, logger)
+	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache, benchmarksCache, providersNetLoad, logger)
 	telemetryWorker = telemetry.NewMetrics(workersRunCount, workersRunDuration, telemetryWorker)
 
 	providersMasterWorker := providersmaster.NewWorker(

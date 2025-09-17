@@ -174,7 +174,7 @@ CREATE TABLE IF NOT EXISTS providers.telemetry
 
 CREATE TABLE IF NOT EXISTS providers.telemetry_history
 (
-    id integer NOT NULL DEFAULT nextval('providers.telemetry_history_id_seq'::regclass),
+    id serial,
     archived_at timestamp with time zone NOT NULL DEFAULT now(),
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
     storage_git_hash character varying(40) COLLATE pg_catalog."default" NOT NULL,
