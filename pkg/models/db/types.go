@@ -88,33 +88,40 @@ type BenchmarkUpdate struct {
 }
 
 type TelemetryUpdate struct {
-	PublicKey          string    `json:"public_key" db:"public_key"`
-	StorageGitHash     string    `json:"storage_git_hash" db:"storage_git_hash"`
-	ProviderGitHash    string    `json:"provider_git_hash" db:"provider_git_hash"`
-	CPUName            string    `json:"cpu_name" db:"cpu_name"`
-	Pings              string    `json:"pings" db:"pings"`
-	CPUProductName     string    `json:"cpu_product_name" db:"cpu_product_name"`
-	USysname           string    `json:"uname_sysname" db:"uname_sysname"`
-	URelease           string    `json:"uname_release" db:"uname_release"`
-	UVersion           string    `json:"uname_version" db:"uname_version"`
-	UMachine           string    `json:"uname_machine" db:"uname_machine"`
-	DiskName           string    `json:"disk_name" db:"disk_name"`
-	CPULoad            []float32 `json:"cpu_load" db:"cpu_load"`
-	TotalDiskSpace     float64   `json:"total_space" db:"total_space"`
-	FreeDiskSpace      float64   `json:"free_space" db:"free_space"`
-	UsedDiskSpace      float64   `json:"used_space" db:"used_space"`
-	UsedProviderSpace  float64   `json:"used_provider_space" db:"used_provider_space"`
-	TotalProviderSpace float64   `json:"total_provider_space" db:"total_provider_space"`
-	SwapTotal          float32   `json:"total_swap" db:"total_swap"`
-	SwapUsage          float32   `json:"usage_swap" db:"usage_swap"`
-	SwapUsagePercent   float32   `json:"swap_usage_percent" db:"swap_usage_percent"`
-	RAMUsage           float32   `json:"usage_ram" db:"usage_ram"`
-	RAMTotal           float32   `json:"total_ram" db:"total_ram"`
-	RAMUsagePercent    float32   `json:"ram_usage_percent" db:"ram_usage_percent"`
-	MaxBagSizeBytes    uint64    `json:"max_bag_size_bytes" db:"max_bag_size_bytes"`
-	CPUNumber          int32     `json:"cpu_number" db:"cpu_number"`
-	CPUIsVirtual       bool      `json:"cpu_is_virtual" db:"cpu_is_virtual"`
-	TelemetryIP        string    `json:"x_real_ip" db:"x_real_ip"`
+	PublicKey          string      `json:"public_key" db:"public_key"`
+	StorageGitHash     string      `json:"storage_git_hash" db:"storage_git_hash"`
+	ProviderGitHash    string      `json:"provider_git_hash" db:"provider_git_hash"`
+	CPUName            string      `json:"cpu_name" db:"cpu_name"`
+	Pings              string      `json:"pings" db:"pings"`
+	CPUProductName     string      `json:"cpu_product_name" db:"cpu_product_name"`
+	USysname           string      `json:"uname_sysname" db:"uname_sysname"`
+	URelease           string      `json:"uname_release" db:"uname_release"`
+	UVersion           string      `json:"uname_version" db:"uname_version"`
+	UMachine           string      `json:"uname_machine" db:"uname_machine"`
+	DiskName           string      `json:"disk_name" db:"disk_name"`
+	CPULoad            []float32   `json:"cpu_load" db:"cpu_load"`
+	TotalDiskSpace     float64     `json:"total_space" db:"total_space"`
+	FreeDiskSpace      float64     `json:"free_space" db:"free_space"`
+	UsedDiskSpace      float64     `json:"used_space" db:"used_space"`
+	UsedProviderSpace  float64     `json:"used_provider_space" db:"used_provider_space"`
+	TotalProviderSpace float64     `json:"total_provider_space" db:"total_provider_space"`
+	SwapTotal          float32     `json:"total_swap" db:"total_swap"`
+	SwapUsage          float32     `json:"usage_swap" db:"usage_swap"`
+	SwapUsagePercent   float32     `json:"swap_usage_percent" db:"swap_usage_percent"`
+	RAMUsage           float32     `json:"usage_ram" db:"usage_ram"`
+	RAMTotal           float32     `json:"total_ram" db:"total_ram"`
+	RAMUsagePercent    float32     `json:"ram_usage_percent" db:"ram_usage_percent"`
+	MaxBagSizeBytes    uint64      `json:"max_bag_size_bytes" db:"max_bag_size_bytes"`
+	CPUNumber          int32       `json:"cpu_number" db:"cpu_number"`
+	CPUIsVirtual       bool        `json:"cpu_is_virtual" db:"cpu_is_virtual"`
+	TelemetryIP        string      `json:"x_real_ip" db:"x_real_ip"`
+	NetLoad            []float32   `json:"net_load"`
+	NetReceived        []float32   `json:"net_recv"`
+	NetSent            []float32   `json:"net_sent"`
+	DisksLoad          interface{} `json:"disks_load"`
+	DisksLoadPercent   interface{} `json:"disks_load_percent"`
+	IOPS               interface{} `json:"iops"`
+	PPS                []float32   `json:"pps"`
 }
 
 type TelemetryDB struct {

@@ -265,7 +265,14 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			ram_usage_percent,
 			cpu_number,
 			cpu_is_virtual,
-			x_real_ip
+			x_real_ip,
+			net_load,
+			net_recv,
+			net_sent,
+			disks_load,
+			disks_load_percent,
+			iops,
+			pps
 		)
 		SELECT 
 			lower(t->>'public_key'),
@@ -279,9 +286,11 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			t->>'uname_version',
 			t->>'uname_machine',
 			t->>'disk_name',
-			ARRAY(
-				SELECT jsonb_array_elements_text(t->'cpu_load')::float8
-			),
+			CASE 
+				WHEN jsonb_typeof(t->'cpu_load') = 'array' 
+				THEN ARRAY( SELECT jsonb_array_elements_text(t->'cpu_load')::float8 ) 
+				ELSE '{}'::float8[] 
+			END,
 			(t->>'total_space')::double precision,
 			(t->>'used_space')::double precision,
 			(t->>'free_space')::double precision,
@@ -295,7 +304,39 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			(t->>'ram_usage_percent')::float4,
 			(t->>'cpu_number')::int4,
 			(t->>'cpu_is_virtual')::boolean,
-			t->>'x_real_ip'
+			t->>'x_real_ip',
+			CASE 
+				WHEN jsonb_typeof(t->'net_load') = 'array' 
+				THEN ARRAY( SELECT jsonb_array_elements_text(t->'net_load')::float8 ) 
+				ELSE '{}'::float8[] 
+			END,
+			CASE 
+				WHEN jsonb_typeof(t->'net_recv') = 'array' 
+				THEN ARRAY( SELECT jsonb_array_elements_text(t->'net_recv')::float8 ) 
+				ELSE '{}'::float8[] 
+			END,
+			CASE 
+				WHEN jsonb_typeof(t->'net_sent') = 'array' 
+				THEN ARRAY( SELECT jsonb_array_elements_text(t->'net_sent')::float8 ) 
+				ELSE '{}'::float8[] 
+			END,
+			CASE 
+				WHEN jsonb_typeof(t->'disks_load') = 'object' 
+				THEN t->'disks_load' ELSE '{}'::jsonb 
+			END,
+			CASE 
+				WHEN jsonb_typeof(t->'disks_load_percent') = 'object' 
+				THEN t->'disks_load_percent' ELSE '{}'::jsonb 
+			END,
+			CASE 
+				WHEN jsonb_typeof(t->'iops') = 'object' 
+				THEN t->'iops' ELSE '{}'::jsonb 
+			END,
+			CASE 
+				WHEN jsonb_typeof(t->'pps') = 'array' 
+				THEN ARRAY( SELECT jsonb_array_elements_text(t->'pps')::float8 ) 
+				ELSE '{}'::float8[] 
+			END
 		FROM jsonb_array_elements($1::jsonb) t
 		ON CONFLICT (public_key) DO UPDATE SET
 			storage_git_hash = EXCLUDED.storage_git_hash,
@@ -323,6 +364,13 @@ func (r *repository) UpdateTelemetry(ctx context.Context, telemetry []db.Telemet
 			cpu_number = EXCLUDED.cpu_number,
 			cpu_is_virtual = EXCLUDED.cpu_is_virtual,
 			x_real_ip = EXCLUDED.x_real_ip,
+			net_load = EXCLUDED.net_load,
+			net_recv = EXCLUDED.net_recv,
+			net_sent = EXCLUDED.net_sent,
+			disks_load = EXCLUDED.disks_load,
+			disks_load_percent = EXCLUDED.disks_load_percent,
+			iops = EXCLUDED.iops,
+			pps = EXCLUDED.pps,
 			updated_at = now()
 	`
 

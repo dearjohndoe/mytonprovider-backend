@@ -104,6 +104,13 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 			MaxBagSizeBytes:    telemetryItem.Storage.Provider.MaxBagSizeBytes,
 			Pings:              pings,
 			TelemetryIP:        telemetryItem.XRealIP,
+			NetLoad:            telemetryItem.NetLoad,
+			NetReceived:        telemetryItem.NetReceived,
+			NetSent:            telemetryItem.NetSent,
+			DisksLoad:          telemetryItem.DisksLoad,
+			DisksLoadPercent:   telemetryItem.DisksLoadPercent,
+			IOPS:               telemetryItem.IOPS,
+			PPS:                telemetryItem.PPS,
 		})
 	}
 
