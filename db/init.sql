@@ -160,17 +160,15 @@ CREATE TABLE IF NOT EXISTS providers.telemetry
     ram_usage_percent real,
     cpu_number integer NOT NULL,
     cpu_is_virtual boolean NOT NULL,
-    benchmarks text COLLATE pg_catalog."default",
-    benchmark_disk_read_speed bigint NOT NULL DEFAULT 0,
-    benchmark_disk_write_speed bigint NOT NULL DEFAULT 0,
-    benchmark_rocks_ops bigint NOT NULL DEFAULT 0,
-    speedtest_download_speed double precision NOT NULL DEFAULT 0.0,
-    speedtest_upload_speed double precision NOT NULL DEFAULT 0.0,
-    speedtest_ping double precision NOT NULL DEFAULT 0.0,
-    country character varying(128) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
-    isp character varying(128) COLLATE pg_catalog."default" NOT NULL DEFAULT ''::character varying,
     updated_at timestamp with time zone DEFAULT now(),
     x_real_ip character varying(16) COLLATE pg_catalog."default" DEFAULT NULL::character varying,
+    disks_load jsonb NOT NULL DEFAULT '{}'::jsonb,
+    disks_load_percent jsonb NOT NULL DEFAULT '{}'::jsonb,
+    iops jsonb NOT NULL DEFAULT '{}'::jsonb,
+    net_load double precision[][] NOT NULL DEFAULT '{}'::double precision[],
+    net_recv double precision[][] NOT NULL DEFAULT '{}'::double precision[],
+    net_sent double precision[][] NOT NULL DEFAULT '{}'::double precision[],
+    pps double precision[][] NOT NULL DEFAULT '{}'::double precision[],
     CONSTRAINT telemetry_pkey PRIMARY KEY (public_key)
 );
 
@@ -204,6 +202,13 @@ CREATE TABLE IF NOT EXISTS providers.telemetry_history
     cpu_number integer NOT NULL,
     cpu_is_virtual boolean NOT NULL,
     x_real_ip character varying(16) COLLATE pg_catalog."default" DEFAULT NULL::character varying,
+    pps double precision[][],
+    iops jsonb NOT NULL DEFAULT '{}'::jsonb,
+    net_sent double precision[][] NOT NULL DEFAULT '{}'::double precision[],
+    net_recv double precision[][] NOT NULL DEFAULT '{}'::double precision[],
+    net_load double precision[][] NOT NULL DEFAULT '{}'::double precision[],
+    disks_load jsonb NOT NULL DEFAULT '{}'::jsonb,
+    disks_load_percent jsonb NOT NULL DEFAULT '{}'::jsonb,
     CONSTRAINT telemetry_history_pkey PRIMARY KEY (id)
 );
 
@@ -294,14 +299,21 @@ AS $BODY$
 BEGIN
     INSERT INTO providers.telemetry_history (
         public_key, storage_git_hash, provider_git_hash, cpu_name, pings, cpu_product_name,
-        uname_sysname, uname_release, uname_version, uname_machine, disk_name, cpu_load, total_space, free_space, used_space,
-        used_provider_space, total_provider_space, total_swap, usage_swap, swap_usage_percent, usage_ram, total_ram,
-        ram_usage_percent, cpu_number, cpu_is_virtual, x_real_ip
+        uname_sysname, uname_release, uname_version, uname_machine, disk_name, cpu_load, 
+        total_space, free_space, used_space, used_provider_space, total_provider_space, 
+        total_swap, usage_swap, swap_usage_percent, usage_ram, total_ram, ram_usage_percent, 
+        cpu_number, cpu_is_virtual, x_real_ip,
+        disks_load, disks_load_percent, iops, pps, net_load, net_recv, net_sent
     ) VALUES (
         OLD.public_key, OLD.storage_git_hash, OLD.provider_git_hash, OLD.cpu_name, OLD.pings, OLD.cpu_product_name,
-        OLD.uname_sysname, OLD.uname_release, OLD.uname_version, OLD.uname_machine, OLD.disk_name, OLD.cpu_load, OLD.total_space, OLD.free_space, OLD.used_space,
-        OLD.used_provider_space, OLD.total_provider_space, OLD.total_swap, OLD.usage_swap, OLD.swap_usage_percent, OLD.usage_ram, OLD.total_ram,
-        OLD.ram_usage_percent, OLD.cpu_number, OLD.cpu_is_virtual, OLD.x_real_ip
+        OLD.uname_sysname, OLD.uname_release, OLD.uname_version, OLD.uname_machine, OLD.disk_name, OLD.cpu_load, 
+        OLD.total_space, OLD.free_space, OLD.used_space, OLD.used_provider_space, OLD.total_provider_space, 
+        OLD.total_swap, OLD.usage_swap, OLD.swap_usage_percent, OLD.usage_ram, OLD.total_ram, OLD.ram_usage_percent, 
+        OLD.cpu_number, OLD.cpu_is_virtual, OLD.x_real_ip,
+        COALESCE(CASE WHEN jsonb_typeof(OLD.disks_load) = 'object' THEN OLD.disks_load ELSE '{}'::jsonb END, '{}'::jsonb),
+        COALESCE(CASE WHEN jsonb_typeof(OLD.disks_load_percent) = 'object' THEN OLD.disks_load_percent ELSE '{}'::jsonb END, '{}'::jsonb),
+        COALESCE(CASE WHEN jsonb_typeof(OLD.iops) = 'object' THEN OLD.iops ELSE '{}'::jsonb END, '{}'::jsonb),
+        OLD.pps, OLD.net_load, OLD.net_recv, OLD.net_sent
     );
     RETURN NEW;
 END;

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"mytonprovider-backend/pkg/cache"
 	v1 "mytonprovider-backend/pkg/models/api/v1"
 	"mytonprovider-backend/pkg/models/db"
@@ -22,6 +24,7 @@ type telemetryWorker struct {
 	providers        providers
 	telemetryBuffer  *cache.SimpleCache
 	benchmarksBuffer *cache.SimpleCache
+	providersNetLoad *prometheus.GaugeVec
 	logger           *slog.Logger
 }
 
@@ -104,7 +107,24 @@ func (w *telemetryWorker) UpdateTelemetry(ctx context.Context) (interval time.Du
 			MaxBagSizeBytes:    telemetryItem.Storage.Provider.MaxBagSizeBytes,
 			Pings:              pings,
 			TelemetryIP:        telemetryItem.XRealIP,
+			NetLoad:            telemetryItem.NetLoad,
+			NetReceived:        telemetryItem.NetReceived,
+			NetSent:            telemetryItem.NetSent,
+			DisksLoad:          telemetryItem.DisksLoad,
+			DisksLoadPercent:   telemetryItem.DisksLoadPercent,
+			IOPS:               telemetryItem.IOPS,
+			PPS:                telemetryItem.PPS,
 		})
+
+		if len(telemetryItem.NetLoad) > 0 {
+			w.providersNetLoad.WithLabelValues(strings.ToLower(pubkey), "total").Set(float64(telemetryItem.NetLoad[0]))
+		}
+		if len(telemetryItem.NetReceived) > 0 {
+			w.providersNetLoad.WithLabelValues(strings.ToLower(pubkey), "received").Set(float64(telemetryItem.NetReceived[0]))
+		}
+		if len(telemetryItem.NetSent) > 0 {
+			w.providersNetLoad.WithLabelValues(strings.ToLower(pubkey), "sent").Set(float64(telemetryItem.NetSent[0]))
+		}
 	}
 
 	if len(items) == 0 {
@@ -208,12 +228,14 @@ func NewWorker(
 	providers providers,
 	telemetry *cache.SimpleCache,
 	benchmarks *cache.SimpleCache,
+	providersLoad *prometheus.GaugeVec,
 	logger *slog.Logger,
 ) Worker {
 	return &telemetryWorker{
 		providers:        providers,
 		telemetryBuffer:  telemetry,
 		benchmarksBuffer: benchmarks,
+		providersNetLoad: providersLoad,
 		logger:           logger,
 	}
 }

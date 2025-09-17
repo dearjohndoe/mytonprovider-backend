@@ -94,11 +94,13 @@ type Filters struct {
 type TelemetryRequest struct {
 	Storage          StorageInfo        `json:"storage"`
 	GitHashes        map[string]string  `json:"git_hashes"`
-	NetLoad          interface{}        `json:"net_load"`           // todo: define
-	DisksLoad        interface{}        `json:"disks_load"`         // todo: define
-	DisksLoadPercent interface{}        `json:"disks_load_percent"` // todo: define
-	IOPS             interface{}        `json:"iops"`               // todo: define
-	PPS              interface{}        `json:"pps"`                // todo: define
+	NetLoad          []float32          `json:"net_load"`
+	NetReceived      []float32          `json:"net_recv"`
+	NetSent          []float32          `json:"net_sent"`
+	DisksLoad        interface{}        `json:"disks_load"`
+	DisksLoadPercent interface{}        `json:"disks_load_percent"`
+	IOPS             interface{}        `json:"iops"`
+	PPS              []float32          `json:"pps"`
 	Memory           MemoryInfo         `json:"ram"`
 	Swap             MemoryInfo         `json:"swap"`
 	Uname            UnameInfo          `json:"uname"`
