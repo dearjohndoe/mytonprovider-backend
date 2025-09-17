@@ -49,7 +49,7 @@ func run() (err error) {
 		Level: logLevel,
 	}))
 	telemetryCache := simpleCache.NewSimpleCache(2 * time.Minute)
-	benchmarksCache := simpleCache.NewSimpleCache(10 * time.Minute)
+	benchmarksCache := simpleCache.NewSimpleCache(2 * time.Minute)
 
 	// Metrics
 	dbRequestsCount := prometheus.NewCounterVec(
