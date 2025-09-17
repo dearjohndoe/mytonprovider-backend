@@ -85,7 +85,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 		FROM providers.providers p
 			LEFT JOIN providers.telemetry t ON p.public_key = t.public_key
 			LEFT JOIN providers.benchmarks b ON p.public_key = b.public_key
-		WHERE p.public_key = ANY($1::text[])`
+		WHERE lower(p.public_key) = ANY(SELECT lower(x) FROM unnest($1::text[]) AS x)`
 
 	rows, err := r.db.Query(ctx, query, pubkeys)
 	if err != nil {
