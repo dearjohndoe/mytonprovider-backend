@@ -2,6 +2,7 @@ package providersmaster
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -14,7 +15,10 @@ import (
 	"time"
 
 	"github.com/xssnick/tonutils-go/address"
+	"github.com/xssnick/tonutils-go/adnl"
 	"github.com/xssnick/tonutils-go/adnl/dht"
+	"github.com/xssnick/tonutils-go/adnl/keys"
+	"github.com/xssnick/tonutils-go/tl"
 	"github.com/xssnick/tonutils-go/tlb"
 	"github.com/xssnick/tonutils-storage-provider/pkg/transport"
 
@@ -84,6 +88,7 @@ type providersMasterWorker struct {
 	system         system
 	ton            ton
 	ipinfo         ipclient
+	gw             *adnl.Gateway
 	providerClient *transport.Client
 	dhtClient      *dht.Client
 	masterAddr     string
@@ -528,14 +533,14 @@ func (w *providersMasterWorker) UpdateIPInfo(ctx context.Context) (interval time
 			timeoutCtx, cancel := context.WithTimeout(ctx, ipInfoTimeout)
 			defer cancel()
 
-			info, err := w.ipinfo.GetIPInfo(timeoutCtx, ip.IP)
+			info, err := w.ipinfo.GetIPInfo(timeoutCtx, ip.Provider.IP)
 			if err != nil {
 				return fmt.Errorf("failed to get IP info: %w", err)
 			}
 
 			s, err := json.Marshal(info)
 			if err != nil {
-				return fmt.Errorf("failed to marshal IP info: %w, ip: %s, info: %s", err, ip.IP, info)
+				return fmt.Errorf("failed to marshal IP info: %w, ip: %s, info: %s", err, ip.Provider.IP, info)
 			}
 
 			ipsInfo = append(ipsInfo, db.ProviderIPInfo{
@@ -618,44 +623,19 @@ func (w *providersMasterWorker) processContractProof(ctx context.Context, sc db.
 		Reason:          unavailableProvider,
 	}
 
-	if providerIP, exists := availableProvidersIPs[sc.ProviderPublicKey]; exists && providerIP.IP == "" {
+	ipInfo := availableProvidersIPs[sc.ProviderPublicKey]
+	if ipInfo.Storage.IP == "" {
 		return result
 	}
 
-	if reason, ok := w.validateContractData(sc); !ok {
-		log.Error("invalid contract data", "address", sc.Address, "provider", sc.ProviderPublicKey, "reason", reason)
-		result.Reason = reason
-		return result
-	}
-
-	proofResult := w.verifyStorageProof(ctx, sc, log)
+	proofResult := w.verifyStorageProof(ctx, ipInfo.Storage, sc, log)
 	result.Reason = proofResult
 
 	return result
 }
 
-func (w *providersMasterWorker) validateContractData(sc db.ContractToProviderRelation) (reason uint32, ok bool) {
-	if sc.Address == "" {
-		reason = invalidAddress
-		return
-	}
+func (w *providersMasterWorker) verifyStorageProof(ctx context.Context, ip db.IPInfo, sc db.ContractToProviderRelation, log *slog.Logger) uint32 {
 
-	if sc.ProviderPublicKey == "" {
-		reason = invalidProviderPublicKey
-		return
-	}
-
-	if sc.Size <= 0 {
-		reason = invalidSize
-		return
-	}
-
-	ok = true
-
-	return
-}
-
-func (w *providersMasterWorker) verifyStorageProof(ctx context.Context, sc db.ContractToProviderRelation, log *slog.Logger) uint32 {
 	addr, err := address.ParseAddr(sc.Address)
 	if err != nil {
 		log.Error("failed to parse contract address", "address", sc.Address, "error", err)
@@ -822,10 +802,10 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			providerIP := w.processProviderIP(ctx, contract, log)
+			providerIPs := w.processProviderIPs(ctx, contract, log)
 
 			mu.Lock()
-			availableProvidersIPs[contract.ProviderPublicKey] = providerIP
+			availableProvidersIPs[contract.ProviderPublicKey] = providerIPs
 			mu.Unlock()
 		}(sc)
 	}
@@ -847,7 +827,7 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 	return
 }
 
-func (w *providersMasterWorker) processProviderIP(ctx context.Context, sc db.ContractToProviderRelation, log *slog.Logger) (result db.ProviderIP) {
+func (w *providersMasterWorker) processProviderIPs(ctx context.Context, sc db.ContractToProviderRelation, log *slog.Logger) (result db.ProviderIP) {
 	result.PublicKey = sc.ProviderPublicKey
 
 	addr, err := address.ParseAddr(sc.Address)
@@ -862,6 +842,20 @@ func (w *providersMasterWorker) processProviderIP(ctx context.Context, sc db.Con
 		return result
 	}
 
+	result.Storage, err = w.findStorageIP(ctx, addr, pk)
+	if err != nil {
+		log.Error("failed to find storage IP", "provider", sc.ProviderPublicKey, "address", sc.Address, "error", err)
+	}
+
+	result.Provider, err = w.findProviderIP(ctx, pk)
+	if err != nil {
+		log.Error("failed to find provider IP", "provider", sc.ProviderPublicKey, "error", err)
+	}
+
+	return
+}
+
+func (w *providersMasterWorker) findStorageIP(ctx context.Context, addr *address.Address, pk []byte) (ip db.IPInfo, err error) {
 	timeoutCtx, cancel := context.WithTimeout(ctx, providerCheckTimeout)
 	defer cancel()
 
@@ -871,26 +865,87 @@ func (w *providersMasterWorker) processProviderIP(ctx context.Context, sc db.Con
 		return
 	}, verifyStorageRetries)
 	if err != nil {
-		log.Error("failed to verify storage adnl proof", "provider", sc.ProviderPublicKey, "error", err)
-		return result
+		err = fmt.Errorf("failed to verify storage adnl proof: %w", err)
+		return
 	}
 
 	l, _, err := w.dhtClient.FindAddresses(ctx, proof)
 	if err != nil {
-		log.Error("failed to find provider addresses", "provider", sc.ProviderPublicKey, "error", err)
-		return result
+		err = fmt.Errorf("failed to find addresses in dht: %w", err)
+		return
 	}
 
 	if l == nil || len(l.Addresses) == 0 {
-		log.Warn("no addresses found for provider", "provider", sc.ProviderPublicKey)
-		return result
+		err = fmt.Errorf("no storage addresses found")
+		return
 	}
 
-	return db.ProviderIP{
-		PublicKey: sc.ProviderPublicKey,
-		IP:        l.Addresses[0].IP.String(),
-		Port:      l.Addresses[0].Port,
+	ip.IP = l.Addresses[0].IP.String()
+	ip.Port = l.Addresses[0].Port
+
+	return
+}
+
+func (w *providersMasterWorker) findProviderIP(ctx context.Context, pk []byte) (ip db.IPInfo, err error) {
+	channelKeyId, err := tl.Hash(keys.PublicKeyED25519{Key: pk})
+	if err != nil {
+		err = fmt.Errorf("failed to calc hash of provider key: %w", err)
+		return
 	}
+
+	dhtVal, _, err := w.dhtClient.FindValue(ctx, &dht.Key{
+		ID:    channelKeyId,
+		Name:  []byte("storage-provider"),
+		Index: 0,
+	})
+	if err != nil {
+		err = fmt.Errorf("failed to find storage-provider in dht: %w", err)
+		return
+	}
+
+	var nodeAddr transport.ProviderDHTRecord
+	if _, err = tl.Parse(&nodeAddr, dhtVal.Data, true); err != nil {
+		err = fmt.Errorf("failed to parse node dht value: %w", err)
+		return
+	}
+
+	if len(nodeAddr.ADNLAddr) == 0 {
+		err = fmt.Errorf("no adnl addresses in node dht value")
+		return
+	}
+
+	addrList, pubKey, fErr := w.dhtClient.FindAddresses(ctx, nodeAddr.ADNLAddr)
+	if fErr != nil {
+		err = fmt.Errorf("failed to find adnl addresses in dht: %w", fErr)
+		return
+	}
+
+	for _, addr := range addrList.Addresses {
+		a := addr.IP.String() + ":" + fmt.Sprint(addr.Port)
+
+		peer, rErr := w.gw.RegisterClient(a, pubKey)
+		if rErr != nil {
+			err = fmt.Errorf("failed to register peer: %w", rErr)
+			continue
+		}
+
+		timeoutCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_, pErr := peer.Ping(timeoutCtx)
+		cancel()
+		if pErr != nil {
+			err = fmt.Errorf("ping failed: %w", pErr)
+			continue
+		}
+
+		ip.IP = addr.IP.String()
+		ip.Port = addr.Port
+
+		return
+	}
+
+	err = fmt.Errorf("no reachable adnl addresses found")
+
+	return
 }
 
 func (w *providersMasterWorker) scanProviderTransactions(ctx context.Context, provider db.ProviderWallet) (contracts map[string]db.StorageContract, lastLT uint64, err error) {
@@ -943,10 +998,23 @@ func NewWorker(
 	batchSize uint32,
 	logger *slog.Logger,
 ) Worker {
+	_, prv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		logger.Error("failed to generate ed25519 key", "error", err)
+		return nil
+	}
+
+	gw := adnl.NewGateway(prv)
+	if err = gw.StartClient(); err != nil {
+		logger.Error("failed to start adnl gateway", "error", err)
+		return nil
+	}
+
 	return &providersMasterWorker{
 		providers:      providers,
 		system:         system,
 		ton:            ton,
+		gw:             gw,
 		providerClient: providerClient,
 		dhtClient:      dhtClient,
 		ipinfo:         ipinfo,

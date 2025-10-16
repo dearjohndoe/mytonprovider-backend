@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS providers.providers
     status integer,
     status_ratio real NOT NULL DEFAULT 0,
     ip_info jsonb DEFAULT '{}'::jsonb,
+    storage_ip character varying(16) COLLATE pg_catalog."default",
+    storage_port integer,
     CONSTRAINT providers_pkey PRIMARY KEY (public_key),
     CONSTRAINT providers_address_key UNIQUE (address)
 );

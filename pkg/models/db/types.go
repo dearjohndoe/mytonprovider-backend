@@ -229,8 +229,13 @@ type StorageContract struct {
 
 type ProviderIP struct {
 	PublicKey string `json:"public_key"`
-	IP        string `json:"ip"`
-	Port      int32  `json:"port"`
+	Storage   IPInfo `json:"storage"`
+	Provider  IPInfo `json:"provider"`
+}
+
+type IPInfo struct {
+	IP   string `json:"ip"`
+	Port int32  `json:"port"`
 }
 
 type ProviderIPInfo struct {

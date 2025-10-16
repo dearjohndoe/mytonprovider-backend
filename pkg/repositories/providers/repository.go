@@ -459,16 +459,20 @@ func (r *repository) UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP
 	query := `
 		UPDATE providers.providers p
 		SET
-			ip = i.ip,
-			port = i.port
+			ip = j.provider_ip,
+			port = j.provider_port,
+			storage_ip = j.storage_ip,
+			storage_port = j.storage_port
 		FROM (
 			SELECT
-				lower(i->>'public_key') AS public_key,
-				i->>'ip' AS ip,
-				(i->>'port')::int AS port
-		FROM jsonb_array_elements($1::jsonb) AS i
-		) AS i
-		WHERE p.public_key = i.public_key
+				lower(s->>'public_key') AS public_key,
+				s->'provider'->>'ip' AS provider_ip,
+				(s->'provider'->>'port')::int AS provider_port,
+				s->'storage'->>'ip' AS storage_ip,
+				(s->'storage'->>'port')::int AS storage_port
+			FROM jsonb_array_elements($1::jsonb) AS s
+		) AS j
+		WHERE p.public_key = j.public_key
 	`
 	_, err = r.db.Exec(ctx, query, ips)
 	if err != nil {
@@ -912,7 +916,7 @@ func (r *repository) GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, 
 	defer rows.Close()
 	for rows.Next() {
 		var ip db.ProviderIP
-		if rErr := rows.Scan(&ip.PublicKey, &ip.IP); rErr != nil {
+		if rErr := rows.Scan(&ip.PublicKey, &ip.Provider.IP); rErr != nil {
 			err = rErr
 			return
 		}
