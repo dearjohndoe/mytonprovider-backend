@@ -174,21 +174,30 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			}
 		}
 
+		var statusesReasonStats []v1.StatusesReasonStats
+		for _, r := range provider.StatusesReasonStats {
+			statusesReasonStats = append(statusesReasonStats, v1.StatusesReasonStats{
+				Reason: r.Reason,
+				Count:  r.Count,
+			})
+		}
+
 		providers = append(providers, v1.Provider{
-			PubKey:          provider.PubKey,
-			Address:         provider.Address,
-			Status:          provider.Status,
-			StatusRatio:     provider.StatusRatio,
-			UpTime:          provider.UpTime,
-			WorkingTime:     workingTime,
-			Rating:          provider.Rating,
-			MaxSpan:         provider.MaxSpan,
-			Price:           provider.Price,
-			MinSpan:         provider.MinSpan,
-			MaxBagSizeBytes: provider.MaxBagSizeBytes,
-			RegTime:         provider.RegTime,
-			IsSendTelemetry: provider.IsSendTelemetry,
-			Location:        location,
+			PubKey:              provider.PubKey,
+			Address:             provider.Address,
+			Status:              provider.Status,
+			StatusRatio:         provider.StatusRatio,
+			StatusesReasonStats: statusesReasonStats,
+			UpTime:              provider.UpTime,
+			WorkingTime:         workingTime,
+			Rating:              provider.Rating,
+			MaxSpan:             provider.MaxSpan,
+			Price:               provider.Price,
+			MinSpan:             provider.MinSpan,
+			MaxBagSizeBytes:     provider.MaxBagSizeBytes,
+			RegTime:             provider.RegTime,
+			IsSendTelemetry:     provider.IsSendTelemetry,
+			Location:            location,
 			Telemetry: v1.Telemetry{
 				UpdatedAt:               &updatedAt,
 				StorageGitHash:          provider.Telemetry.StorageGitHash,

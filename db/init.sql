@@ -9,6 +9,23 @@ CREATE SCHEMA system AUTHORIZATION pguser;
 
 -- TABLES
 
+CREATE TABLE IF NOT EXISTS system.reason_codes (
+    code        int         PRIMARY KEY,
+    description text        NOT NULL
+);
+INSERT INTO system.reason_codes (code, description) VALUES
+    (0, 'Valid storage proof'),
+    (101, 'IP Not Found'),
+    (102, 'Not Found(impossible)'),
+    (103, 'Unavailable Provider'),
+    (201, 'Ping Failed'),
+    (202, 'Invalid Bag ID'),
+    (301, 'Get Info Failed'),
+    (302, 'Invalid Header'),
+    (401, 'Cant Get Piece'),
+    (402, 'Cant Parse BoC'),
+    (403, 'Proof Check Failed');
+
 CREATE TABLE IF NOT EXISTS providers.benchmarks
 (
     public_key text COLLATE pg_catalog."default" NOT NULL,
@@ -65,6 +82,7 @@ CREATE TABLE IF NOT EXISTS providers.providers
     ip_info jsonb DEFAULT '{}'::jsonb,
     storage_ip character varying(16) COLLATE pg_catalog."default",
     storage_port integer,
+    statuses_reason_stats JSONB DEFAULT '[]'::JSONB,
     CONSTRAINT providers_pkey PRIMARY KEY (public_key),
     CONSTRAINT providers_address_key UNIQUE (address)
 );

@@ -52,6 +52,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			p.address,
 			p.status,
 			p.status_ratio,
+			p.statuses_reason_stats,
 			COALESCE(p.uptime, 0) * 100 as uptime,
 			COALESCE(p.rating, 0) as rating,
 			p.max_span,
@@ -674,8 +675,9 @@ func (r *repository) AddStorageContracts(ctx context.Context, contracts []db.Sto
 func (r *repository) UpdateStatuses(ctx context.Context) (err error) {
 	query := `
 		UPDATE providers.providers p 
-		SET status = selected_reasons.reason,
-			status_ratio = selected_reasons.ratio
+		SET status = selected_reasons.most_recent_reason,
+			status_ratio = selected_reasons.most_recent_ratio,
+    		statuses_reason_stats = selected_reasons.reason_stats
 		FROM (
 			WITH collect_statuses AS (
 				SELECT 
@@ -694,11 +696,12 @@ func (r *repository) UpdateStatuses(ctx context.Context) (err error) {
 				GROUP BY p.address, sc.reason
 			)
 			SELECT 
-				address, 
-				reason,
-				ROUND(cnt::numeric / total_cnt::numeric, 4) as ratio
-			FROM collect_statuses
-			WHERE rn = 1
+				t.address, 
+				to_json(ARRAY_AGG(json_build_object('reason', t.reason, 'cnt', t.cnt))) AS reason_stats, 
+				MAX(CASE WHEN t.rn = 1 THEN t.reason END) AS most_recent_reason,
+				MAX(CASE WHEN t.rn = 1 THEN ROUND(t.cnt::numeric / t.total_cnt::numeric, 4) END) AS most_recent_ratio
+			FROM collect_statuses t
+			GROUP BY t.address
 		) selected_reasons
 		WHERE p.address = selected_reasons.address;
 	`
@@ -742,16 +745,15 @@ func (r *repository) UpdateContractProofsChecks(ctx context.Context, contractsPr
 	query := `
 		WITH cte AS (
 			SELECT
-				c->>'address' AS address,
+				c->>'contract_address' AS address,
 				c->>'provider_address' AS provider_address,
-				(c->>'reason')::integer AS reason,
-				(c->>'timestamp')::timestamptz AS timestamp
+				(c->>'reason')::integer AS reason
 			FROM jsonb_array_elements($1::jsonb) AS c
 		)
 		UPDATE providers.storage_contracts sc
 		SET
 			reason = c.reason,
-			reason_timestamp = c.timestamp
+			reason_timestamp = now()
 		FROM cte c
 		WHERE sc.address = c.address AND c.provider_address = sc.provider_address
 	`
@@ -767,6 +769,7 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.Co
 			p.public_key as provider_public_key,
 			sc.provider_address,
 			sc.address,
+			sc.bag_id,
 			sc.size
 		FROM providers.storage_contracts sc
 			JOIN providers.providers p ON p.address = sc.provider_address
@@ -785,7 +788,13 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.Co
 	defer rows.Close()
 	for rows.Next() {
 		var contract db.ContractToProviderRelation
-		if rErr := rows.Scan(&contract.ProviderPublicKey, &contract.ProviderAddress, &contract.Address, &contract.Size); rErr != nil {
+		if rErr := rows.Scan(
+			&contract.ProviderPublicKey,
+			&contract.ProviderAddress,
+			&contract.Address,
+			&contract.BagID,
+			&contract.Size,
+		); rErr != nil {
 			err = rErr
 			return
 		}

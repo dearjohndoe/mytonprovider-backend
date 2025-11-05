@@ -1,6 +1,11 @@
 package db
 
-import "time"
+import (
+	"crypto/ed25519"
+	"time"
+
+	"mytonprovider-backend/pkg/constants"
+)
 
 type ProviderUpdate struct {
 	Pubkey       string `json:"public_key"`
@@ -174,16 +179,22 @@ type FiltersRange struct {
 	TotalRAMMax                float32
 }
 
+type ReasonStat struct {
+	Reason uint32 `json:"reason"`
+	Count  uint32 `json:"cnt"`
+}
+
 type ProviderDB struct {
-	Location    *Location `json:"location"`
-	Status      *uint32   `json:"status"`
-	PubKey      string    `json:"public_key"`
-	Address     string    `json:"address"`
-	UpTime      float32   `json:"uptime"`
-	Rating      float32   `json:"rating"`
-	StatusRatio float32   `json:"status_ratio"`
-	MaxSpan     uint32    `json:"max_span"`
-	Price       uint64    `json:"price"`
+	Location            *Location    `json:"location"`
+	Status              *uint32      `json:"status"`
+	PubKey              string       `json:"public_key"`
+	Address             string       `json:"address"`
+	UpTime              float32      `json:"uptime"`
+	Rating              float32      `json:"rating"`
+	StatusRatio         float32      `json:"status_ratio"`
+	StatusesReasonStats []ReasonStat `json:"statuses_reason_stats"`
+	MaxSpan             uint32       `json:"max_span"`
+	Price               uint64       `json:"price"`
 
 	MinSpan         uint32      `json:"min_span"`
 	MaxBagSizeBytes uint64      `json:"max_bag_size_bytes"`
@@ -214,6 +225,7 @@ type ContractToProviderRelation struct {
 	ProviderPublicKey string `json:"provider_public_key"`
 	ProviderAddress   string `json:"provider_address"`
 	Address           string `json:"address"`
+	BagID             string `json:"bag_id"`
 	Size              uint64 `json:"size"`
 }
 
@@ -234,8 +246,9 @@ type ProviderIP struct {
 }
 
 type IPInfo struct {
-	IP   string `json:"ip"`
-	Port int32  `json:"port"`
+	PublicKey ed25519.PublicKey `json:"pk"`
+	IP        string            `json:"ip"`
+	Port      int32             `json:"port"`
 }
 
 type ProviderIPInfo struct {
@@ -244,10 +257,9 @@ type ProviderIPInfo struct {
 }
 
 type ContractProofsCheck struct {
-	Address         string    `json:"address"`
-	ProviderAddress string    `json:"provider_address"`
-	Reason          uint32    `json:"reason"`
-	Timestamp       time.Time `json:"timestamp"`
+	ContractAddress string               `json:"contract_address"`
+	ProviderAddress string               `json:"provider_address"`
+	Reason          constants.ReasonCode `json:"reason"`
 }
 
 type ContractCheck struct {

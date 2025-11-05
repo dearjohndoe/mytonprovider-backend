@@ -237,17 +237,23 @@ type Telemetry struct {
 	CPUIsVirtual            *bool    `json:"cpu_is_virtual"`
 }
 
+type StatusesReasonStats struct {
+	Reason uint32 `json:"reason"`
+	Count  uint32 `json:"cnt"`
+}
+
 type Provider struct {
-	Location    *Location `json:"location"`
-	Status      *uint32   `json:"status"`
-	PubKey      string    `json:"pubkey"`
-	Address     string    `json:"address"`
-	UpTime      float32   `json:"uptime"`
-	StatusRatio float32   `json:"status_ratio"`
-	WorkingTime uint64    `json:"working_time"`
-	Rating      float32   `json:"rating"`
-	MaxSpan     uint32    `json:"max_span"`
-	Price       uint64    `json:"price"`
+	Location            *Location             `json:"location"`
+	Status              *uint32               `json:"status"`
+	PubKey              string                `json:"pubkey"`
+	Address             string                `json:"address"`
+	UpTime              float32               `json:"uptime"`
+	StatusRatio         float32               `json:"status_ratio"`
+	StatusesReasonStats []StatusesReasonStats `json:"statuses_reason_stats"`
+	WorkingTime         uint64                `json:"working_time"`
+	Rating              float32               `json:"rating"`
+	MaxSpan             uint32                `json:"max_span"`
+	Price               uint64                `json:"price"`
 
 	MinSpan         uint32    `json:"min_span"`
 	MaxBagSizeBytes uint64    `json:"max_bag_size_bytes"`
