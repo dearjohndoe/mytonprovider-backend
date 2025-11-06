@@ -255,11 +255,12 @@ type Provider struct {
 	MaxSpan             uint32                `json:"max_span"`
 	Price               uint64                `json:"price"`
 
-	MinSpan         uint32    `json:"min_span"`
-	MaxBagSizeBytes uint64    `json:"max_bag_size_bytes"`
-	RegTime         uint64    `json:"reg_time"`
-	IsSendTelemetry bool      `json:"is_send_telemetry"`
-	Telemetry       Telemetry `json:"telemetry"`
+	MinSpan             uint32    `json:"min_span"`
+	MaxBagSizeBytes     uint64    `json:"max_bag_size_bytes"`
+	RegTime             uint64    `json:"reg_time"`
+	LastOnlineCheckTime *uint64   `json:"last_online_check_time"`
+	IsSendTelemetry     bool      `json:"is_send_telemetry"`
+	Telemetry           Telemetry `json:"telemetry"`
 }
 
 type Location struct {

@@ -159,11 +159,6 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 	for _, provider := range providersDB {
 		workingTime := uint64(time.Now().Unix()) - provider.RegTime
 
-		var updatedAt uint64
-		if provider.Telemetry.UpdatedAt != nil {
-			updatedAt = *provider.Telemetry.UpdatedAt
-		}
-
 		var location *v1.Location
 		if provider.Location != nil {
 			location = &v1.Location{
@@ -196,10 +191,11 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			MinSpan:             provider.MinSpan,
 			MaxBagSizeBytes:     provider.MaxBagSizeBytes,
 			RegTime:             provider.RegTime,
+			LastOnlineCheckTime: provider.LastOnlineCheckTime,
 			IsSendTelemetry:     provider.IsSendTelemetry,
 			Location:            location,
 			Telemetry: v1.Telemetry{
-				UpdatedAt:               &updatedAt,
+				UpdatedAt:               provider.Telemetry.UpdatedAt,
 				StorageGitHash:          provider.Telemetry.StorageGitHash,
 				ProviderGitHash:         provider.Telemetry.ProviderGitHash,
 				TotalProviderSpace:      provider.Telemetry.TotalProviderSpace,

@@ -46,10 +46,12 @@ const (
 			b.speedtest_upload,
 			b.speedtest_ping,
 			b.country,
-			b.isp
+			b.isp,
+    		l.check_time as last_status_check_time
 		FROM providers.providers p
 			LEFT JOIN providers.telemetry t ON p.public_key = t.public_key
 			LEFT JOIN providers.benchmarks b ON p.public_key = b.public_key
+    		LEFT JOIN providers.last_online l ON p.public_key = l.public_key
 		WHERE p.is_initialized AND p.rating IS NOT NULL AND p.uptime IS NOT NULL
 			%s
 		ORDER BY %s
@@ -238,6 +240,7 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 	for rows.Next() {
 		var regTime time.Time
 		var updatedAt *time.Time
+		var lastOnlineCheckTime *time.Time
 		var location *db.Location
 		var provider db.ProviderDB
 		if err := rows.Scan(
@@ -272,13 +275,20 @@ func scanProviderDBRows(rows pgx.Rows) (providers []db.ProviderDB, err error) {
 			&provider.Telemetry.SpeedtestUpload,
 			&provider.Telemetry.SpeedtestPing,
 			&provider.Telemetry.Country,
-			&provider.Telemetry.ISP); err != nil {
+			&provider.Telemetry.ISP,
+			&lastOnlineCheckTime,
+		); err != nil {
 			return nil, err
 		}
 
 		if updatedAt != nil {
 			u := uint64(updatedAt.Unix())
 			provider.Telemetry.UpdatedAt = &u
+		}
+
+		if lastOnlineCheckTime != nil {
+			u := uint64(lastOnlineCheckTime.Unix())
+			provider.LastOnlineCheckTime = &u
 		}
 
 		if location != nil {

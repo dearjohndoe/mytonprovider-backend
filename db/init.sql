@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS system.reason_codes (
     code        int         PRIMARY KEY,
     description text        NOT NULL
 );
+
 INSERT INTO system.reason_codes (code, description) VALUES
     (0, 'Valid storage proof'),
     (101, 'IP Not Found'),
@@ -118,6 +119,13 @@ CREATE TABLE IF NOT EXISTS providers.statuses_history
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
     check_time timestamp with time zone NOT NULL,
     is_online boolean NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS providers.last_online 
+(
+    public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    check_time timestamp with time zone NOT NULL,
+    CONSTRAINT pk_last_online PRIMARY KEY (public_key)
 );
 
 CREATE TABLE IF NOT EXISTS providers.storage_contracts
@@ -409,6 +417,23 @@ begin
 end;
 $BODY$;
 
+CREATE FUNCTION providers.save_last_online()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+BEGIN
+    IF NEW.is_online THEN
+        INSERT INTO providers.last_online (public_key, check_time)
+        VALUES (NEW.public_key, NEW.check_time)
+        ON CONFLICT (public_key) DO UPDATE
+        SET check_time = EXCLUDED.check_time;
+    END IF;
+    RETURN NEW;
+END
+$BODY$;
+
 CREATE FUNCTION providers.move_to_storage_contracts_history()
     RETURNS trigger
     LANGUAGE plpgsql
@@ -460,6 +485,10 @@ FOR EACH ROW EXECUTE FUNCTION providers.log_status_history();
 CREATE TRIGGER trg_log_status_update 
 AFTER UPDATE ON providers.statuses 
 FOR EACH ROW EXECUTE FUNCTION providers.log_status_history();
+
+CREATE TRIGGER trg_save_last_online
+AFTER INSERT OR UPDATE ON providers.statuses
+FOR EACH ROW EXECUTE FUNCTION providers.save_last_online();
 
 CREATE TRIGGER storage_contracts_delete_trigger 
 BEFORE DELETE ON providers.storage_contracts 

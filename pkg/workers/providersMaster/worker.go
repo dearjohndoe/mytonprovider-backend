@@ -438,7 +438,6 @@ func (w *providersMasterWorker) StoreProof(ctx context.Context) (interval time.D
 		return
 	}
 
-	// todo: перепроверь что всё ещё работает и накидай тестов
 	storageContracts, err = w.updateRejectedContracts(ctx, storageContracts)
 	if err != nil {
 		interval = failureInterval
@@ -691,9 +690,6 @@ func checkProviderFiles(ctx context.Context, gw *adnl.Gateway, ip db.ProviderIP,
 		})
 
 		stats[reason]++
-
-		// todo: remove
-		log.Debug("bag checked", "bag_id", sc.BagID, "reason_status", reason)
 
 		if reason == constants.ValidStorageProof {
 			failsInARow = 0
