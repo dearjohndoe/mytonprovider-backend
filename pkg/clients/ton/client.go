@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/xssnick/tonutils-go/address"
@@ -19,6 +20,7 @@ import (
 const (
 	getProvidersRetries = 5
 	retries             = 20
+	parrallelRequests   = 30
 	batch               = 100
 	singleQueryTimeout  = 5 * time.Second
 )
@@ -156,46 +158,62 @@ func (c *client) GetProvidersInfo(ctx context.Context, addrs []string) (contract
 		return
 	}
 
+	var semaphore = make(chan struct{}, parrallelRequests)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	contractsProviders = make([]StorageContractProviders, 0, len(addrs))
 	for _, a := range addrs {
-		addr, err := address.ParseAddr(a)
-		if err != nil {
-			log.Error("invalid address", slog.String("address", a), slog.String("error", err.Error()))
-			continue
-		}
+		wg.Add(1)
 
-		var info []pContract.ProviderDataV1
-		var coins tlb.Coins
-		err = utils.TryNTimes(func() error {
-			var cErr error
-			info, coins, cErr = pContract.GetProvidersV1(ctx, api, block, addr)
-			return cErr
-		}, getProvidersRetries)
-		if err != nil {
-			log.Error("get providers info", slog.String("address", a), slog.String("error", err.Error()))
-			continue
-		}
+		go func(addrStr string) {
+			defer wg.Done()
+			semaphore <- struct{}{}
+			defer func() { <-semaphore }()
 
-		providers := make([]Provider, 0, len(info))
-		for _, p := range info {
-			providers = append(providers, Provider{
-				Key:           string(p.Key),
-				LastProofTime: p.LastProofAt,
-				RatePerMBDay:  p.RatePerMB.Nano().Uint64(),
-				MaxSpan:       p.MaxSpan,
+			addr, parseErr := address.ParseAddr(addrStr)
+			if parseErr != nil {
+				log.Error("invalid address", slog.String("address", addrStr), slog.String("error", parseErr.Error()))
+				return
+			}
+
+			var info []pContract.ProviderDataV1
+			var coins tlb.Coins
+			callErr := utils.TryNTimes(func() error {
+				var cErr error
+				info, coins, cErr = pContract.GetProvidersV1(ctx, api, block, addr)
+				return cErr
+			}, getProvidersRetries)
+			if callErr != nil {
+				log.Error("get providers info", slog.String("address", addrStr), slog.String("error", callErr.Error()))
+				return
+			}
+
+			providers := make([]Provider, 0, len(info))
+			for _, p := range info {
+				providers = append(providers, Provider{
+					Key:           string(p.Key),
+					LastProofTime: p.LastProofAt,
+					RatePerMBDay:  p.RatePerMB.Nano().Uint64(),
+					MaxSpan:       p.MaxSpan,
+				})
+			}
+
+			if len(providers) == 0 {
+				return
+			}
+
+			mu.Lock()
+			contractsProviders = append(contractsProviders, StorageContractProviders{
+				Address:   addrStr,
+				Balance:   coins.Nano().Uint64(),
+				Providers: providers,
 			})
-		}
-
-		if len(providers) == 0 {
-			continue
-		}
-
-		contractsProviders = append(contractsProviders, StorageContractProviders{
-			Address:   a,
-			Balance:   coins.Nano().Uint64(),
-			Providers: providers,
-		})
+			mu.Unlock()
+		}(a)
 	}
+
+	wg.Wait()
 
 	return
 }

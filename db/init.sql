@@ -9,6 +9,24 @@ CREATE SCHEMA system AUTHORIZATION pguser;
 
 -- TABLES
 
+CREATE TABLE IF NOT EXISTS system.reason_codes (
+    code        int         PRIMARY KEY,
+    description text        NOT NULL
+);
+
+INSERT INTO system.reason_codes (code, description) VALUES
+    (0, 'Valid storage proof'),
+    (101, 'IP Not Found'),
+    (102, 'Not Found(impossible)'),
+    (103, 'Unavailable Provider'),
+    (201, 'Ping Failed'),
+    (202, 'Invalid Bag ID'),
+    (301, 'Get Info Failed'),
+    (302, 'Invalid Header'),
+    (401, 'Cant Get Piece'),
+    (402, 'Cant Parse BoC'),
+    (403, 'Proof Check Failed');
+
 CREATE TABLE IF NOT EXISTS providers.benchmarks
 (
     public_key text COLLATE pg_catalog."default" NOT NULL,
@@ -63,6 +81,9 @@ CREATE TABLE IF NOT EXISTS providers.providers
     status integer,
     status_ratio real NOT NULL DEFAULT 0,
     ip_info jsonb DEFAULT '{}'::jsonb,
+    storage_ip character varying(16) COLLATE pg_catalog."default",
+    storage_port integer,
+    statuses_reason_stats JSONB DEFAULT '[]'::JSONB,
     CONSTRAINT providers_pkey PRIMARY KEY (public_key),
     CONSTRAINT providers_address_key UNIQUE (address)
 );
@@ -98,6 +119,13 @@ CREATE TABLE IF NOT EXISTS providers.statuses_history
     public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
     check_time timestamp with time zone NOT NULL,
     is_online boolean NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS providers.last_online 
+(
+    public_key character varying(64) COLLATE pg_catalog."default" NOT NULL,
+    check_time timestamp with time zone NOT NULL,
+    CONSTRAINT pk_last_online PRIMARY KEY (public_key)
 );
 
 CREATE TABLE IF NOT EXISTS providers.storage_contracts
@@ -389,6 +417,23 @@ begin
 end;
 $BODY$;
 
+CREATE FUNCTION providers.save_last_online()
+    RETURNS trigger
+    LANGUAGE plpgsql
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+BEGIN
+    IF NEW.is_online THEN
+        INSERT INTO providers.last_online (public_key, check_time)
+        VALUES (NEW.public_key, NEW.check_time)
+        ON CONFLICT (public_key) DO UPDATE
+        SET check_time = EXCLUDED.check_time;
+    END IF;
+    RETURN NEW;
+END
+$BODY$;
+
 CREATE FUNCTION providers.move_to_storage_contracts_history()
     RETURNS trigger
     LANGUAGE plpgsql
@@ -440,6 +485,10 @@ FOR EACH ROW EXECUTE FUNCTION providers.log_status_history();
 CREATE TRIGGER trg_log_status_update 
 AFTER UPDATE ON providers.statuses 
 FOR EACH ROW EXECUTE FUNCTION providers.log_status_history();
+
+CREATE TRIGGER trg_save_last_online
+AFTER INSERT OR UPDATE ON providers.statuses
+FOR EACH ROW EXECUTE FUNCTION providers.save_last_online();
 
 CREATE TRIGGER storage_contracts_delete_trigger 
 BEFORE DELETE ON providers.storage_contracts 

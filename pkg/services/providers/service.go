@@ -159,11 +159,6 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 	for _, provider := range providersDB {
 		workingTime := uint64(time.Now().Unix()) - provider.RegTime
 
-		var updatedAt uint64
-		if provider.Telemetry.UpdatedAt != nil {
-			updatedAt = *provider.Telemetry.UpdatedAt
-		}
-
 		var location *v1.Location
 		if provider.Location != nil {
 			location = &v1.Location{
@@ -174,23 +169,33 @@ func convertDBProvidersToAPI(providersDB []db.ProviderDB) []v1.Provider {
 			}
 		}
 
+		var statusesReasonStats []v1.StatusesReasonStats
+		for _, r := range provider.StatusesReasonStats {
+			statusesReasonStats = append(statusesReasonStats, v1.StatusesReasonStats{
+				Reason: r.Reason,
+				Count:  r.Count,
+			})
+		}
+
 		providers = append(providers, v1.Provider{
-			PubKey:          provider.PubKey,
-			Address:         provider.Address,
-			Status:          provider.Status,
-			StatusRatio:     provider.StatusRatio,
-			UpTime:          provider.UpTime,
-			WorkingTime:     workingTime,
-			Rating:          provider.Rating,
-			MaxSpan:         provider.MaxSpan,
-			Price:           provider.Price,
-			MinSpan:         provider.MinSpan,
-			MaxBagSizeBytes: provider.MaxBagSizeBytes,
-			RegTime:         provider.RegTime,
-			IsSendTelemetry: provider.IsSendTelemetry,
-			Location:        location,
+			PubKey:              provider.PubKey,
+			Address:             provider.Address,
+			Status:              provider.Status,
+			StatusRatio:         provider.StatusRatio,
+			StatusesReasonStats: statusesReasonStats,
+			UpTime:              provider.UpTime,
+			WorkingTime:         workingTime,
+			Rating:              provider.Rating,
+			MaxSpan:             provider.MaxSpan,
+			Price:               provider.Price,
+			MinSpan:             provider.MinSpan,
+			MaxBagSizeBytes:     provider.MaxBagSizeBytes,
+			RegTime:             provider.RegTime,
+			LastOnlineCheckTime: provider.LastOnlineCheckTime,
+			IsSendTelemetry:     provider.IsSendTelemetry,
+			Location:            location,
 			Telemetry: v1.Telemetry{
-				UpdatedAt:               &updatedAt,
+				UpdatedAt:               provider.Telemetry.UpdatedAt,
 				StorageGitHash:          provider.Telemetry.StorageGitHash,
 				ProviderGitHash:         provider.Telemetry.ProviderGitHash,
 				TotalProviderSpace:      provider.Telemetry.TotalProviderSpace,

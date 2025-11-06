@@ -52,6 +52,7 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			p.address,
 			p.status,
 			p.status_ratio,
+			p.statuses_reason_stats,
 			COALESCE(p.uptime, 0) * 100 as uptime,
 			COALESCE(p.rating, 0) as rating,
 			p.max_span,
@@ -81,10 +82,12 @@ func (r *repository) GetProvidersByPubkeys(ctx context.Context, pubkeys []string
 			b.speedtest_upload,
 			b.speedtest_ping,
 			b.country,
-			b.isp
+			b.isp,
+    		l.check_time as last_status_check_time
 		FROM providers.providers p
 			LEFT JOIN providers.telemetry t ON p.public_key = t.public_key
 			LEFT JOIN providers.benchmarks b ON p.public_key = b.public_key
+    		LEFT JOIN providers.last_online l ON p.public_key = l.public_key
 		WHERE lower(p.public_key) = ANY(SELECT lower(x) FROM unnest($1::text[]) AS x)`
 
 	rows, err := r.db.Query(ctx, query, pubkeys)
@@ -459,16 +462,20 @@ func (r *repository) UpdateProvidersIPs(ctx context.Context, ips []db.ProviderIP
 	query := `
 		UPDATE providers.providers p
 		SET
-			ip = i.ip,
-			port = i.port
+			ip = j.provider_ip,
+			port = j.provider_port,
+			storage_ip = j.storage_ip,
+			storage_port = j.storage_port
 		FROM (
 			SELECT
-				lower(i->>'public_key') AS public_key,
-				i->>'ip' AS ip,
-				(i->>'port')::int AS port
-		FROM jsonb_array_elements($1::jsonb) AS i
-		) AS i
-		WHERE p.public_key = i.public_key
+				lower(s->>'public_key') AS public_key,
+				s->'provider'->>'ip' AS provider_ip,
+				(s->'provider'->>'port')::int AS provider_port,
+				s->'storage'->>'ip' AS storage_ip,
+				(s->'storage'->>'port')::int AS storage_port
+			FROM jsonb_array_elements($1::jsonb) AS s
+		) AS j
+		WHERE p.public_key = j.public_key
 	`
 	_, err = r.db.Exec(ctx, query, ips)
 	if err != nil {
@@ -670,8 +677,9 @@ func (r *repository) AddStorageContracts(ctx context.Context, contracts []db.Sto
 func (r *repository) UpdateStatuses(ctx context.Context) (err error) {
 	query := `
 		UPDATE providers.providers p 
-		SET status = selected_reasons.reason,
-			status_ratio = selected_reasons.ratio
+		SET status = selected_reasons.most_recent_reason,
+			status_ratio = selected_reasons.most_recent_ratio,
+    		statuses_reason_stats = selected_reasons.reason_stats
 		FROM (
 			WITH collect_statuses AS (
 				SELECT 
@@ -690,11 +698,12 @@ func (r *repository) UpdateStatuses(ctx context.Context) (err error) {
 				GROUP BY p.address, sc.reason
 			)
 			SELECT 
-				address, 
-				reason,
-				ROUND(cnt::numeric / total_cnt::numeric, 4) as ratio
-			FROM collect_statuses
-			WHERE rn = 1
+				t.address, 
+				to_json(ARRAY_AGG(json_build_object('reason', t.reason, 'cnt', t.cnt))) AS reason_stats, 
+				MAX(CASE WHEN t.rn = 1 THEN t.reason END) AS most_recent_reason,
+				MAX(CASE WHEN t.rn = 1 THEN ROUND(t.cnt::numeric / t.total_cnt::numeric, 4) END) AS most_recent_ratio
+			FROM collect_statuses t
+			GROUP BY t.address
 		) selected_reasons
 		WHERE p.address = selected_reasons.address;
 	`
@@ -738,16 +747,15 @@ func (r *repository) UpdateContractProofsChecks(ctx context.Context, contractsPr
 	query := `
 		WITH cte AS (
 			SELECT
-				c->>'address' AS address,
+				c->>'contract_address' AS address,
 				c->>'provider_address' AS provider_address,
-				(c->>'reason')::integer AS reason,
-				(c->>'timestamp')::timestamptz AS timestamp
+				(c->>'reason')::integer AS reason
 			FROM jsonb_array_elements($1::jsonb) AS c
 		)
 		UPDATE providers.storage_contracts sc
 		SET
 			reason = c.reason,
-			reason_timestamp = c.timestamp
+			reason_timestamp = now()
 		FROM cte c
 		WHERE sc.address = c.address AND c.provider_address = sc.provider_address
 	`
@@ -763,6 +771,7 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.Co
 			p.public_key as provider_public_key,
 			sc.provider_address,
 			sc.address,
+			sc.bag_id,
 			sc.size
 		FROM providers.storage_contracts sc
 			JOIN providers.providers p ON p.address = sc.provider_address
@@ -781,7 +790,13 @@ func (r *repository) GetStorageContracts(ctx context.Context) (contracts []db.Co
 	defer rows.Close()
 	for rows.Next() {
 		var contract db.ContractToProviderRelation
-		if rErr := rows.Scan(&contract.ProviderPublicKey, &contract.ProviderAddress, &contract.Address, &contract.Size); rErr != nil {
+		if rErr := rows.Scan(
+			&contract.ProviderPublicKey,
+			&contract.ProviderAddress,
+			&contract.Address,
+			&contract.BagID,
+			&contract.Size,
+		); rErr != nil {
 			err = rErr
 			return
 		}
@@ -912,7 +927,7 @@ func (r *repository) GetProvidersIPs(ctx context.Context) (ips []db.ProviderIP, 
 	defer rows.Close()
 	for rows.Next() {
 		var ip db.ProviderIP
-		if rErr := rows.Scan(&ip.PublicKey, &ip.IP); rErr != nil {
+		if rErr := rows.Scan(&ip.PublicKey, &ip.Provider.IP); rErr != nil {
 			err = rErr
 			return
 		}
