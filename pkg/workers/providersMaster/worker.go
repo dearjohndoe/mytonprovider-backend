@@ -6,6 +6,7 @@ import (
 	"crypto/ed25519"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math/big"
@@ -576,10 +577,6 @@ func (w *providersMasterWorker) UpdateIPInfo(ctx context.Context) (interval time
 func (w *providersMasterWorker) updateActiveContracts(ctx context.Context, storageContracts []db.ContractToProviderRelation, availableProvidersIPs map[string]db.ProviderIP) (err error) {
 	log := w.logger.With(slog.String("worker", "StoreProof"), slog.String("function", "updateActiveContracts"))
 
-	if len(storageContracts) == 0 || len(availableProvidersIPs) == 0 {
-		return nil
-	}
-
 	providersContracts := make(map[string][]db.ContractToProviderRelation)
 	for _, sc := range storageContracts {
 		providersContracts[sc.ProviderPublicKey] = append(providersContracts[sc.ProviderPublicKey], sc)
@@ -600,8 +597,8 @@ func (w *providersMasterWorker) updateActiveContracts(ctx context.Context, stora
 			gw := adnl.NewGateway(w.prv)
 			defer gw.Close()
 
-			if err = gw.StartClient(); err != nil {
-				log.Error("failed to start ADNL gateway", "error", err)
+			if sErr := gw.StartClient(); sErr != nil {
+				log.Error("failed to start ADNL gateway", "error", sErr)
 				return
 			}
 
@@ -663,6 +660,17 @@ func checkProviderFiles(ctx context.Context, gw *adnl.Gateway, ip db.ProviderIP,
 	addr := ip.Storage.IP + ":" + strconv.Itoa(int(ip.Storage.Port))
 	peer, rErr := gw.RegisterClient(addr, ip.Storage.PublicKey)
 	if rErr != nil {
+		log.Debug("failed to create ADNL peer", "error", rErr)
+		fillStatuses(bagsStatuses, storageContracts, constants.CantCreatePeer)
+		return
+	}
+
+	pingCtx, pingCancel := context.WithTimeout(ctx, pingTimeout)
+	_, pErr := peer.Ping(pingCtx)
+	pingCancel()
+	if pErr != nil {
+		log.Debug("initial provider ping failed", "error", pErr)
+		fillStatuses(bagsStatuses, storageContracts, constants.FailedInitialPing)
 		return
 	}
 
@@ -696,6 +704,9 @@ func checkProviderFiles(ctx context.Context, gw *adnl.Gateway, ip db.ProviderIP,
 		} else {
 			failsInARow++
 		}
+
+		// weak providers may be overloaded
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	for reason, count := range stats {
@@ -711,7 +722,7 @@ func checkPiece(ctx context.Context, rl *rldp.RLDP, bagID string, log *slog.Logg
 	peer, ok := rl.GetADNL().(adnl.Peer)
 	if !ok {
 		log.Error("failed to get ADNL peer")
-		reason = constants.UnavailableProvider
+		reason = constants.UnknownPeer
 		return
 	}
 
@@ -904,10 +915,8 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 
 	if len(storageContracts) == 0 {
 		log.Debug("no storage contracts to process for IP update")
-		return nil, nil
+		return
 	}
-
-	availableProvidersIPs = make(map[string]db.ProviderIP, len(storageContracts))
 
 	uniqueProviders := make(map[string]db.ContractToProviderRelation)
 	for _, sc := range storageContracts {
@@ -916,11 +925,15 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 		}
 	}
 
+	availableProvidersIPs = make(map[string]db.ProviderIP, len(uniqueProviders))
+	notFoundIPs := make([]string, 0)
+
 	semaphore := make(chan struct{}, maxConcurrentProviderChecks)
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 
+	// try to find storage IPs using provider's storage adnl proof
 	for _, sc := range uniqueProviders {
 		wg.Add(1)
 		go func(contract db.ContractToProviderRelation) {
@@ -929,9 +942,9 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			providerIPs, pErr := w.processProviderIPs(ctx, contract, log)
+			providerIPs, pErr := w.findProviderIPs(ctx, contract, log)
 			if pErr != nil {
-				return
+				notFoundIPs = append(notFoundIPs, contract.ProviderPublicKey)
 			}
 
 			mu.Lock()
@@ -941,6 +954,40 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 	}
 
 	wg.Wait()
+
+	// reserve way. Try to find storage IPs using overlay DHT for not found IPs
+	for _, pk := range notFoundIPs {
+		ip := availableProvidersIPs[pk]
+		// nothing we can do if provider IP not found
+		if ip.Provider.IP == "" {
+			log.Info("provider IP not found", "provider_pubkey", pk)
+			delete(availableProvidersIPs, pk)
+			continue
+		}
+
+		providerContracts := make([]db.ContractToProviderRelation, 0)
+		for _, sc := range storageContracts {
+			if sc.ProviderPublicKey == pk {
+				providerContracts = append(providerContracts, sc)
+			}
+		}
+
+		if len(providerContracts) == 0 {
+			log.Info("no contracts found for provider to find storage IP via overlay", "provider_pubkey", pk)
+			delete(availableProvidersIPs, pk)
+			continue
+		}
+
+		storageIP, err := w.findStorageIPOverlay(ctx, ip.Provider.IP, providerContracts, log)
+		if err != nil {
+			log.Error("failed to find storage IP via overlay", "provider_pubkey", pk, "error", err)
+			delete(availableProvidersIPs, pk)
+			continue
+		}
+
+		ip.Storage = storageIP
+		availableProvidersIPs[pk] = ip
+	}
 
 	ips := make([]db.ProviderIP, 0, len(availableProvidersIPs))
 	for _, p := range availableProvidersIPs {
@@ -957,7 +1004,98 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 	return
 }
 
-func (w *providersMasterWorker) processProviderIPs(ctx context.Context, sc db.ContractToProviderRelation, log *slog.Logger) (result db.ProviderIP, err error) {
+func (w *providersMasterWorker) findStorageIPOverlay(ctx context.Context, providerIP string, contracts []db.ContractToProviderRelation, log *slog.Logger) (ip db.IPInfo, err error) {
+	if len(contracts) == 0 {
+		err = fmt.Errorf("no contracts provided")
+		return
+	}
+
+	bagsToCheck := len(contracts)
+	switch {
+	case len(contracts) > 100:
+		bagsToCheck = max(1, len(contracts)*10/100)
+	case len(contracts) > 5:
+		bagsToCheck = max(1, len(contracts)*20/100)
+	}
+
+	log = log.With("provider_ip", providerIP, "bags_to_check", bagsToCheck, "total_bags", len(contracts))
+
+	shuffled := make([]db.ContractToProviderRelation, len(contracts))
+	copy(shuffled, contracts)
+	rand.Shuffle(len(shuffled), func(i, j int) {
+		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
+	})
+
+	for i := 0; i < bagsToCheck && i < len(shuffled); i++ {
+		sc := shuffled[i]
+
+		bag, dErr := hex.DecodeString(sc.BagID)
+		if dErr != nil {
+			log.Error("failed to decode bag ID", "bag_id", sc.BagID, "error", dErr)
+			continue
+		}
+
+		dhtTimeoutCtx, cancel := context.WithTimeout(ctx, dhtTimeout)
+		nodesList, _, fErr := w.dhtClient.FindOverlayNodes(dhtTimeoutCtx, bag)
+		cancel()
+
+		if fErr != nil {
+			if !errors.Is(fErr, dht.ErrDHTValueIsNotFound) {
+				log.Error("failed to find bag overlay nodes", "bag_id", sc.BagID, "error", fErr)
+			}
+			continue
+		}
+
+		if nodesList == nil || len(nodesList.List) == 0 {
+			log.Debug("no peers found for bag in DHT", "bag_id", sc.BagID)
+			continue
+		}
+
+		for _, node := range nodesList.List {
+			key, ok := node.ID.(keys.PublicKeyED25519)
+			if !ok {
+				continue
+			}
+
+			adnlID, hErr := tl.Hash(key)
+			if hErr != nil {
+				log.Error("failed to hash overlay key", "error", hErr)
+				continue
+			}
+
+			dhtTimeoutCtx2, cancel2 := context.WithTimeout(ctx, dhtTimeout)
+			addrList, pubKey, fErr := w.dhtClient.FindAddresses(dhtTimeoutCtx2, adnlID)
+			cancel2()
+
+			if fErr != nil {
+				if !errors.Is(fErr, dht.ErrDHTValueIsNotFound) {
+					log.Debug("failed to find addresses in DHT", "error", fErr)
+				}
+				continue
+			}
+
+			if addrList == nil || len(addrList.Addresses) == 0 {
+				continue
+			}
+
+			for _, addr := range addrList.Addresses {
+				if addr.IP.String() == providerIP {
+					ip.PublicKey = pubKey
+					ip.IP = addr.IP.String()
+					ip.Port = addr.Port
+
+					log.Info("found storage IP via overlay DHT", "provider_pubkey", sc.ProviderPublicKey, "ip", ip.IP, "port", ip.Port)
+					return
+				}
+			}
+		}
+	}
+
+	err = fmt.Errorf("storage IP not found via overlay DHT after checking %d bags", bagsToCheck)
+	return
+}
+
+func (w *providersMasterWorker) findProviderIPs(ctx context.Context, sc db.ContractToProviderRelation, log *slog.Logger) (result db.ProviderIP, err error) {
 	log = log.With("provider_pubkey", sc.ProviderPublicKey)
 
 	result.PublicKey = sc.ProviderPublicKey
@@ -974,15 +1112,15 @@ func (w *providersMasterWorker) processProviderIPs(ctx context.Context, sc db.Co
 		return
 	}
 
-	result.Storage, err = w.findStorageIP(ctx, addr, pk)
+	result.Provider, err = w.findProviderIP(ctx, pk)
 	if err != nil {
-		log.Error("failed to find storage IP", "address", sc.Address, "error", err)
+		log.Error("failed to verify provider IP", "error", err)
 		return
 	}
 
-	result.Provider, err = w.findProviderIP(ctx, pk)
+	result.Storage, err = w.findStorageIP(ctx, addr, pk)
 	if err != nil {
-		log.Error("failed to find provider IP", "error", err)
+		log.Error("failed to find storage IP", "address", sc.Address, "error", err)
 		return
 	}
 
@@ -1055,51 +1193,20 @@ func (w *providersMasterWorker) findProviderIP(ctx context.Context, pk []byte) (
 
 	dhtTimeoutCtx2, cancel2 := context.WithTimeout(ctx, dhtTimeout)
 	defer cancel2()
-	addrList, pubKey, fErr := w.dhtClient.FindAddresses(dhtTimeoutCtx2, nodeAddr.ADNLAddr)
+	l, pub, fErr := w.dhtClient.FindAddresses(dhtTimeoutCtx2, nodeAddr.ADNLAddr)
 	if fErr != nil {
 		err = fmt.Errorf("failed to find adnl addresses in dht: %w", fErr)
 		return
 	}
 
-	for _, addr := range addrList.Addresses {
-		ip, found := func() (ip db.IPInfo, found bool) {
-			a := addr.IP.String() + ":" + fmt.Sprint(addr.Port)
-
-			gw := adnl.NewGateway(w.prv)
-			defer gw.Close()
-
-			if cErr := gw.StartClient(); cErr != nil {
-				err = fmt.Errorf("failed to start ADNL gateway: %w", cErr)
-				return
-			}
-
-			peer, rErr := gw.RegisterClient(a, pubKey)
-			if rErr != nil {
-				err = fmt.Errorf("failed to register peer: %w", rErr)
-				return
-			}
-
-			timeoutCtx, cancel := context.WithTimeout(ctx, pingTimeout)
-			_, pErr := peer.Ping(timeoutCtx)
-			cancel()
-			if pErr != nil {
-				err = fmt.Errorf("ping failed: %w", pErr)
-				return
-			}
-
-			ip.IP = addr.IP.String()
-			ip.Port = addr.Port
-			found = true
-
-			return
-		}()
-
-		if found {
-			return ip, nil
-		}
+	if l == nil || len(l.Addresses) == 0 {
+		err = fmt.Errorf("no provider addresses found")
+		return
 	}
 
-	err = fmt.Errorf("no reachable adnl addresses found")
+	ip.PublicKey = pub
+	ip.IP = l.Addresses[0].IP.String()
+	ip.Port = l.Addresses[0].Port
 
 	return
 }
