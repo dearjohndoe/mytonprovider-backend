@@ -537,8 +537,9 @@ func (r *repository) UpdateRating(ctx context.Context) (err error) {
 		)
 		UPDATE providers.providers p
 		SET rating = (
+		(
 			(
-				0.0001 * (EXTRACT(EPOCH FROM pr.registered_at) * COALESCE(pr.uptime, 0)) +
+				0.0001 * EXTRACT(EPOCH FROM pr.registered_at) +
 				0.00002 * (COALESCE(pr.max_span, 0) - COALESCE(pr.min_span, 0)) +
 				0.00000000008 * COALESCE(pr.max_bag_size_bytes, 0) +
 				0.000000004 * COALESCE(pr.total_provider_space, 0) +
@@ -550,7 +551,11 @@ func (r *repository) UpdateRating(ctx context.Context) (err error) {
 				0.00004 * COALESCE(pr.speedtest_upload, 0) +
 				CASE WHEN COALESCE(pr.speedtest_ping, 0) > 0 THEN 400 / pr.speedtest_ping ELSE 1 END
 			)
-			/ GREATEST(LOG(COALESCE(NULLIF(pr.rate_per_mb_per_day / 100, 0), 1)), 1)
+			* POWER(COALESCE(pr.uptime, 0.01), 
+				2 + LEAST(EXTRACT(EPOCH FROM NOW() - pr.registered_at) / (86400.0 * 90), 6)
+			)
+		)
+		/ GREATEST(LOG(COALESCE(NULLIF(pr.rate_per_mb_per_day / 100, 0), 1)), 1)
 		) / 10000.0
 		FROM params pr
 		WHERE p.public_key = pr.public_key
