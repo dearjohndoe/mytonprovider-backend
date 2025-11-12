@@ -57,6 +57,8 @@ const (
 		ORDER BY %s
 		LIMIT $1
 		OFFSET $2`
+
+	minFreeDiskSpaceGb float64 = 4
 )
 
 func sortToCondition(sort db.ProviderSort) (condition string) {
@@ -137,6 +139,10 @@ func filtersToCondition(filters db.ProviderFilters, args []any) (condition strin
 	}
 	if filters.MaxBagSizeBytesLt != nil {
 		condition += fmt.Sprintf(" AND p.max_bag_size_bytes/1024/1024 <= %d + 1", *filters.MaxBagSizeBytesLt)
+	}
+	if filters.HasFreeSpace != nil && *filters.HasFreeSpace {
+		resArgs = append(resArgs, minFreeDiskSpaceGb)
+		condition += fmt.Sprintf(" AND t.total_provider_space - t.used_provider_space > $%d", len(resArgs))
 	}
 	if filters.IsSendTelemetry != nil {
 		if *filters.IsSendTelemetry {

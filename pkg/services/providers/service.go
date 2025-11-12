@@ -239,6 +239,7 @@ func buildProviderQueryParams(req v1.SearchProvidersRequest) (db.ProviderFilters
 		MaxSpanLt:                    req.Filters.MaxSpanLt,
 		MaxBagSizeBytesGt:            req.Filters.MaxBagSizeMbGt,
 		MaxBagSizeBytesLt:            req.Filters.MaxBagSizeMbLt,
+		HasFreeSpace:                 req.Filters.HasFreeSpace,
 		IsSendTelemetry:              req.Filters.IsSendTelemetry,
 		TotalProviderSpaceGt:         req.Filters.TotalProviderSpaceGt,
 		TotalProviderSpaceLt:         req.Filters.TotalProviderSpaceLt,

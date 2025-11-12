@@ -65,6 +65,7 @@ type ProviderFilters struct {
 	UsageRamPercentGt            *float32 `json:"ram_usage_percent_gt,omitempty"`
 	UsageRamPercentLt            *float32 `json:"ram_usage_percent_lt,omitempty"`
 	CPUIsVirtual                 *bool    `json:"cpu_is_virtual,omitempty"`
+	HasFreeSpace                 *bool    `json:"has_free_space,omitempty"`
 	IsSendTelemetry              *bool    `json:"is_send_telemetry,omitempty"`
 }
 

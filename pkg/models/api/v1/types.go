@@ -62,6 +62,7 @@ type Filters struct {
 	MaxSpanLt                 *int64   `json:"max_span_lt,omitempty"`
 	MaxBagSizeMbGt            *int64   `json:"max_bag_size_mb_gt,omitempty"`
 	MaxBagSizeMbLt            *int64   `json:"max_bag_size_mb_lt,omitempty"`
+	HasFreeSpace              *bool    `json:"has_free_space,omitempty"`
 	IsSendTelemetry           *bool    `json:"is_send_telemetry,omitempty"`
 	TotalProviderSpaceGt      *float64 `json:"total_provider_space_gt,omitempty"`
 	TotalProviderSpaceLt      *float64 `json:"total_provider_space_lt,omitempty"`
