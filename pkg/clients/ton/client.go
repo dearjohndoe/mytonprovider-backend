@@ -186,7 +186,6 @@ func (c *client) GetProvidersInfo(ctx context.Context, addrs []string) (contract
 			}, getProvidersRetries)
 			if callErr != nil {
 				log.Error("get providers info", slog.String("address", addrStr), slog.String("error", callErr.Error()))
-				return
 			}
 
 			providers := make([]Provider, 0, len(info))
@@ -199,15 +198,12 @@ func (c *client) GetProvidersInfo(ctx context.Context, addrs []string) (contract
 				})
 			}
 
-			if len(providers) == 0 {
-				return
-			}
-
 			mu.Lock()
 			contractsProviders = append(contractsProviders, StorageContractProviders{
-				Address:   addrStr,
-				Balance:   coins.Nano().Uint64(),
-				Providers: providers,
+				Address:         addrStr,
+				Balance:         coins.Nano().Uint64(),
+				Providers:       providers,
+				LiteServerError: callErr != nil,
 			})
 			mu.Unlock()
 		}(a)
