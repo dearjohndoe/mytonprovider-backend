@@ -287,70 +287,101 @@ BEGIN
 END;
 $BODY$;
 
-CREATE FUNCTION providers.archive_benchmarks()
+CREATE OR REPLACE FUNCTION providers.archive_benchmarks_after_update()
     RETURNS trigger
     LANGUAGE plpgsql
     COST 100
     VOLATILE NOT LEAKPROOF
 AS $BODY$
 BEGIN
-    INSERT INTO providers.benchmarks_history (
-        public_key, disk, benchmark_timestamp, server, client, share, timestamp, bytes_received, bytes_sent, download, upload, ping
-    ) VALUES (
-        OLD.public_key, OLD.disk, OLD.benchmark_timestamp, OLD.server, OLD.client, OLD.share, OLD.timestamp, OLD.bytes_received, OLD.bytes_sent, OLD.download, OLD.upload, OLD.ping
-    );
-    RETURN OLD;
-END;
-$BODY$;
-
-CREATE FUNCTION providers.archive_benchmarks_after_update()
-    RETURNS trigger
-    LANGUAGE plpgsql
-    COST 100
-    VOLATILE NOT LEAKPROOF
-AS $BODY$
-BEGIN
-    INSERT INTO providers.benchmarks_history (
-        public_key, disk, network, qd64_disk_read_speed, qd64_disk_write_speed, 
-        benchmark_timestamp, speedtest_download, speedtest_upload, speedtest_ping, country, isp
-    ) VALUES (
-        OLD.public_key, OLD.disk, OLD.network, OLD.qd64_disk_read_speed, OLD.qd64_disk_write_speed,
-        OLD.benchmark_timestamp, OLD.speedtest_download, OLD.speedtest_upload, OLD.speedtest_ping, OLD.country, OLD.isp
-    );
+    IF 
+        OLD.disk IS DISTINCT FROM NEW.disk OR
+        OLD.network IS DISTINCT FROM NEW.network OR
+        OLD.qd64_disk_read_speed IS DISTINCT FROM NEW.qd64_disk_read_speed OR
+        OLD.qd64_disk_write_speed IS DISTINCT FROM NEW.qd64_disk_write_speed OR
+        OLD.benchmark_timestamp IS DISTINCT FROM NEW.benchmark_timestamp OR
+        floor(OLD.speedtest_download::numeric / 1000000) IS DISTINCT FROM floor(NEW.speedtest_download::numeric / 1000000) OR
+        floor(OLD.speedtest_upload::numeric / 1000000) IS DISTINCT FROM floor(NEW.speedtest_upload::numeric / 1000000) OR
+        floor(OLD.speedtest_ping::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.speedtest_ping::numeric * 10) / 10 OR
+        OLD.country IS DISTINCT FROM NEW.country OR
+        OLD.isp IS DISTINCT FROM NEW.isp
+    THEN
+        INSERT INTO providers.benchmarks_history (
+            public_key, disk, network, qd64_disk_read_speed, qd64_disk_write_speed, 
+            benchmark_timestamp, speedtest_download, speedtest_upload, speedtest_ping, country, isp
+        ) VALUES (
+            OLD.public_key, OLD.disk, OLD.network, OLD.qd64_disk_read_speed, OLD.qd64_disk_write_speed,
+            OLD.benchmark_timestamp, OLD.speedtest_download, OLD.speedtest_upload, OLD.speedtest_ping, OLD.country, OLD.isp
+        );
+    END IF;
     RETURN NEW;
 END;
 $BODY$;
 
-CREATE FUNCTION providers.archive_telemetry()
+CREATE OR REPLACE FUNCTION providers.archive_telemetry()
     RETURNS trigger
     LANGUAGE plpgsql
     COST 100
     VOLATILE NOT LEAKPROOF
 AS $BODY$
 BEGIN
-    INSERT INTO providers.telemetry_history (
-        public_key, storage_git_hash, provider_git_hash, cpu_name, pings, cpu_product_name,
-        uname_sysname, uname_release, uname_version, uname_machine, disk_name, cpu_load, 
-        total_space, free_space, used_space, used_provider_space, total_provider_space, 
-        total_swap, usage_swap, swap_usage_percent, usage_ram, total_ram, ram_usage_percent, 
-        cpu_number, cpu_is_virtual, x_real_ip,
-        disks_load, disks_load_percent, iops, pps, net_load, net_recv, net_sent
-    ) VALUES (
-        OLD.public_key, OLD.storage_git_hash, OLD.provider_git_hash, OLD.cpu_name, OLD.pings, OLD.cpu_product_name,
-        OLD.uname_sysname, OLD.uname_release, OLD.uname_version, OLD.uname_machine, OLD.disk_name, OLD.cpu_load, 
-        OLD.total_space, OLD.free_space, OLD.used_space, OLD.used_provider_space, OLD.total_provider_space, 
-        OLD.total_swap, OLD.usage_swap, OLD.swap_usage_percent, OLD.usage_ram, OLD.total_ram, OLD.ram_usage_percent, 
-        OLD.cpu_number, OLD.cpu_is_virtual, OLD.x_real_ip,
-        COALESCE(CASE WHEN jsonb_typeof(OLD.disks_load) = 'object' THEN OLD.disks_load ELSE '{}'::jsonb END, '{}'::jsonb),
-        COALESCE(CASE WHEN jsonb_typeof(OLD.disks_load_percent) = 'object' THEN OLD.disks_load_percent ELSE '{}'::jsonb END, '{}'::jsonb),
-        COALESCE(CASE WHEN jsonb_typeof(OLD.iops) = 'object' THEN OLD.iops ELSE '{}'::jsonb END, '{}'::jsonb),
-        OLD.pps, OLD.net_load, OLD.net_recv, OLD.net_sent
-    );
+    IF 
+        OLD.storage_git_hash IS DISTINCT FROM NEW.storage_git_hash OR
+        OLD.provider_git_hash IS DISTINCT FROM NEW.provider_git_hash OR
+        OLD.cpu_name IS DISTINCT FROM NEW.cpu_name OR
+        OLD.cpu_product_name IS DISTINCT FROM NEW.cpu_product_name OR
+        OLD.uname_sysname IS DISTINCT FROM NEW.uname_sysname OR
+        OLD.uname_release IS DISTINCT FROM NEW.uname_release OR
+        OLD.uname_version IS DISTINCT FROM NEW.uname_version OR
+        OLD.uname_machine IS DISTINCT FROM NEW.uname_machine OR
+        OLD.disk_name IS DISTINCT FROM NEW.disk_name OR
+        floor(OLD.total_space::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.total_space::numeric * 10) / 10 OR
+        floor(OLD.free_space::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.free_space::numeric * 10) / 10 OR
+        floor(OLD.used_space::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.used_space::numeric * 10) / 10 OR
+        floor(OLD.used_provider_space::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.used_provider_space::numeric * 10) / 10 OR
+        floor(OLD.total_provider_space::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.total_provider_space::numeric * 10) / 10 OR
+        floor(OLD.total_swap::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.total_swap::numeric * 10) / 10 OR
+        floor(OLD.usage_swap::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.usage_swap::numeric * 10) / 10 OR
+        floor(OLD.swap_usage_percent::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.swap_usage_percent::numeric * 10) / 10 OR
+        floor(OLD.usage_ram::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.usage_ram::numeric * 10) / 10 OR
+        floor(OLD.total_ram::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.total_ram::numeric * 10) / 10 OR
+        floor(OLD.ram_usage_percent::numeric * 10) / 10 IS DISTINCT FROM floor(NEW.ram_usage_percent::numeric * 10) / 10 OR
+        OLD.cpu_number IS DISTINCT FROM NEW.cpu_number OR
+        OLD.cpu_is_virtual IS DISTINCT FROM NEW.cpu_is_virtual OR
+        OLD.x_real_ip IS DISTINCT FROM NEW.x_real_ip OR
+        OLD.iops IS DISTINCT FROM NEW.iops OR
+        OLD.pps IS DISTINCT FROM NEW.pps OR
+        OLD.net_sent IS DISTINCT FROM NEW.net_sent OR
+        OLD.net_load IS DISTINCT FROM NEW.net_load OR
+        OLD.net_recv IS DISTINCT FROM NEW.net_recv OR
+        OLD.cpu_load IS DISTINCT FROM NEW.cpu_load OR
+        OLD.disks_load IS DISTINCT FROM NEW.disks_load OR
+        OLD.disks_load_percent IS DISTINCT FROM NEW.disks_load_percent
+    THEN
+        INSERT INTO providers.telemetry_history (
+            public_key, storage_git_hash, provider_git_hash, cpu_name, pings, cpu_product_name,
+            uname_sysname, uname_release, uname_version, uname_machine, disk_name, cpu_load, 
+            total_space, free_space, used_space, used_provider_space, total_provider_space, 
+            total_swap, usage_swap, swap_usage_percent, usage_ram, total_ram, ram_usage_percent, 
+            cpu_number, cpu_is_virtual, x_real_ip,
+            disks_load, disks_load_percent, iops, pps, net_load, net_recv, net_sent
+        ) VALUES (
+            OLD.public_key, OLD.storage_git_hash, OLD.provider_git_hash, OLD.cpu_name, OLD.pings, OLD.cpu_product_name,
+            OLD.uname_sysname, OLD.uname_release, OLD.uname_version, OLD.uname_machine, OLD.disk_name, OLD.cpu_load, 
+            OLD.total_space, OLD.free_space, OLD.used_space, OLD.used_provider_space, OLD.total_provider_space, 
+            OLD.total_swap, OLD.usage_swap, OLD.swap_usage_percent, OLD.usage_ram, OLD.total_ram, OLD.ram_usage_percent, 
+            OLD.cpu_number, OLD.cpu_is_virtual, OLD.x_real_ip,
+            COALESCE(CASE WHEN jsonb_typeof(OLD.disks_load) = 'object' THEN OLD.disks_load ELSE '{}'::jsonb END, '{}'::jsonb),
+            COALESCE(CASE WHEN jsonb_typeof(OLD.disks_load_percent) = 'object' THEN OLD.disks_load_percent ELSE '{}'::jsonb END, '{}'::jsonb),
+            COALESCE(CASE WHEN jsonb_typeof(OLD.iops) = 'object' THEN OLD.iops ELSE '{}'::jsonb END, '{}'::jsonb),
+            OLD.pps, OLD.net_load, OLD.net_recv, OLD.net_sent
+        );
+    END IF;
     RETURN NEW;
 END;
 $BODY$;
 
-CREATE FUNCTION providers.log_provider_update()
+CREATE OR REPLACE FUNCTION providers.log_provider_update()
     RETURNS trigger
     LANGUAGE plpgsql
     COST 100
@@ -358,17 +389,12 @@ CREATE FUNCTION providers.log_provider_update()
 AS $BODY$
 begin
     if 
-        old.public_key is distinct from new.public_key or
-        old.address is distinct from new.address or
-        old.registered_at is distinct from new.registered_at or
-        old.uptime is distinct from new.uptime or
-        old.rating is distinct from new.rating or
-        old.updated_at is distinct from new.updated_at or
         old.min_bounty is distinct from new.min_bounty or
         old.rate_per_mb_per_day is distinct from new.rate_per_mb_per_day or
         old.min_span is distinct from new.min_span or
         old.max_span is distinct from new.max_span or
-        old.is_initialized is distinct from new.is_initialized or
+        floor(old.uptime::numeric * 100) / 100 is distinct from floor(new.uptime::numeric * 100) / 100 or
+        floor(old.rating::numeric) is distinct from floor(new.rating::numeric)
     then
         insert into providers.providers_history (
             public_key,
@@ -400,7 +426,7 @@ begin
 end;
 $BODY$;
 
-CREATE FUNCTION providers.log_status_history()
+CREATE OR REPLACE FUNCTION providers.log_status_history()
     RETURNS trigger
     LANGUAGE plpgsql
     COST 100
@@ -419,8 +445,8 @@ begin
     return new;
 end;
 $BODY$;
-
-CREATE FUNCTION providers.save_last_online()
+    
+CREATE OR REPLACE FUNCTION providers.save_last_online()
     RETURNS trigger
     LANGUAGE plpgsql
     COST 100
@@ -437,7 +463,7 @@ BEGIN
 END
 $BODY$;
 
-CREATE FUNCTION providers.move_to_storage_contracts_history()
+CREATE OR REPLACE FUNCTION providers.move_to_storage_contracts_history()
     RETURNS trigger
     LANGUAGE plpgsql
     COST 100
