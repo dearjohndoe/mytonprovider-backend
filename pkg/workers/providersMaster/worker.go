@@ -860,8 +860,13 @@ func (w *providersMasterWorker) updateRejectedContracts(ctx context.Context, sto
 		return
 	}
 
+	type contractInfo struct {
+		providers map[string]struct{}
+		skip      bool
+	}
+
 	// map of storage contract addresses to their active providers
-	activeRelations := make(map[string]map[string]struct{}, len(contractsProvidersList))
+	activeRelations := make(map[string]contractInfo, len(contractsProvidersList))
 	for _, contract := range contractsProvidersList {
 		contractProviders := make(map[string]struct{}, len(contract.Providers))
 		for _, provider := range contract.Providers {
@@ -877,8 +882,10 @@ func (w *providersMasterWorker) updateRejectedContracts(ctx context.Context, sto
 			contractProviders[providerPublicKey] = struct{}{}
 		}
 
-		if len(contractProviders) != 0 {
-			activeRelations[contract.Address] = contractProviders
+		// in case no available lite servers use skip, to not remove contracts from db
+		activeRelations[contract.Address] = contractInfo{
+			providers: contractProviders,
+			skip:      contract.LiteServerError,
 		}
 	}
 
@@ -886,8 +893,13 @@ func (w *providersMasterWorker) updateRejectedContracts(ctx context.Context, sto
 	closedContracts := make([]db.ContractToProviderRelation, 0, len(storageContracts))
 
 	for _, sc := range storageContracts {
-		if contractProviders, exists := activeRelations[sc.Address]; exists {
-			if _, providerExists := contractProviders[sc.ProviderPublicKey]; providerExists {
+		if contractInfo, exists := activeRelations[sc.Address]; exists {
+			if contractInfo.skip {
+				log.Debug("lite servers is not available, skip providers check for", "address", sc.Address)
+				continue
+			}
+
+			if _, providerExists := contractInfo.providers[sc.ProviderPublicKey]; providerExists {
 				activeContracts = append(activeContracts, sc)
 			} else {
 				closedContracts = append(closedContracts, sc)

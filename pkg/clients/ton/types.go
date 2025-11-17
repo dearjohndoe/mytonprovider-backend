@@ -23,9 +23,10 @@ type StorageContract struct {
 }
 
 type StorageContractProviders struct {
-	Address   string
-	Balance   uint64
-	Providers []Provider
+	Address         string
+	Balance         uint64
+	Providers       []Provider
+	LiteServerError bool
 }
 
 type Provider struct {
