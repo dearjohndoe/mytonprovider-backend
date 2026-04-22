@@ -52,9 +52,47 @@ PG_USER=pguser PG_PASSWORD=secret PG_DB=providerdb NEWFRONTENDUSER=jdfront NEWSU
 
 Upon completion, it will output useful information about server usage.
 
-## Dev:
+## Dev
+
+### Local Development
+
+#### Requirements
+
+- Docker
+- Docker Compose
+
+#### Quick Start
+
+1. Copy the environment file:
+
+```bash
+cp .env.example .env
+```
+
+2. Start the services:
+
+```bash
+docker compose up --build
+```
+
+The server will be available at `http://localhost:9090`.
+
+#### Stop
+
+```bash
+docker compose down
+```
+
+To fully clean up including database data:
+
+```bash
+docker compose down -v
+```
+
 ### VS Code Configuration
+
 Create `.vscode/launch.json`:
+
 ```json
 {
     "version": "0.2.0",

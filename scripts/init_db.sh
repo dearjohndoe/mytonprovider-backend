@@ -4,7 +4,7 @@
 
 set -e
 
-SQL_FILE="../db/init.sql"
+SQL_FILE="$(dirname "$0")/../db/init.sql"
 
 if [[ -z "$PG_USER" || -z "$PG_PASSWORD" || -z "$PG_DB" ]]; then
     echo "❌ Missing required environment variables"

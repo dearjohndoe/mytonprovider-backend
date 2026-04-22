@@ -25,6 +25,10 @@ sed -i "s/^#listen_addresses =.*/listen_addresses = '*'/" "$PG_CONF"
 sed -i "s/^listen_addresses = 'localhost'/listen_addresses = '*'/" "$PG_CONF"
 grep -q "0.0.0.0/0" "$PG_HBA" || echo "host    all             all             0.0.0.0/0               md5" >> "$PG_HBA"
 systemctl restart postgresql
+if ! systemctl is-active --quiet postgresql; then
+    echo "❌ PostgreSQL failed to start"
+    exit 1
+fi
 
 # create user
 echo "Creating PostgreSQL user and database..."

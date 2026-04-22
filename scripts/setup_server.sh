@@ -16,7 +16,7 @@
 
 set -e
 
-PG_VERSION="15"
+PG_VERSION="${PG_VERSION:-15}"
 GITHUB_REPO="dearjohndoe/mytonprovider-backend"
 GITHUB_BRANCH="master"
 SCRIPTS_BASE_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH/scripts"

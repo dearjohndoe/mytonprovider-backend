@@ -21,6 +21,7 @@ DB_NAME=${PG_DB}
 SYSTEM_LOG_LEVEL=0
 EOL
 
+mkdir -p /opt/provider
 mv mtpo-backend /opt/provider/
 mv config.env /opt/provider/
 

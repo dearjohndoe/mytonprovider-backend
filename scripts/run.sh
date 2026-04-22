@@ -2,7 +2,9 @@
 
 cd /opt/provider
 
-env $(cat config.env | xargs) ./mtpo-backend >> /var/log/mytonprovider.app/mytonprovider.app.log 2>&1 &
+mkdir -p /var/log/mytonprovider.app
+
+env $(grep -v '^\s*$' config.env | grep -v '=$' | xargs) ./mtpo-backend >> /var/log/mytonprovider.app/mytonprovider.app.log 2>&1 &
 
 sleep 5
 
