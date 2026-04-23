@@ -3,7 +3,7 @@
 # This script builds the backend application for the TON provider.
 # Also generates the .env file with necessary configurations.
 
-cd "$WORK_DIR/mytonprovider-backend/"
+cd "$WORK_DIR/mytonprovider-backend/" || exit
 
 go build -buildvcs=false -o mtpo-backend ./cmd
 
@@ -21,6 +21,7 @@ DB_NAME=${PG_DB}
 SYSTEM_LOG_LEVEL=0
 EOL
 
+mkdir -p /opt/provider
 mv mtpo-backend /opt/provider/
 mv config.env /opt/provider/
 

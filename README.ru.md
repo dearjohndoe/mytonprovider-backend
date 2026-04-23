@@ -53,8 +53,45 @@ PG_USER=pguser PG_PASSWORD=secret PG_DB=providerdb NEWFRONTENDUSER=jdfront NEWSU
 
 ## Разработка
 
+### Локальная разработка
+
+#### Требования
+
+- Docker
+- Docker Compose
+
+#### Быстрый старт
+
+1. Скопируйте файл окружения:
+
+```bash
+cp .env.example .env
+```
+
+2. Запустите сервисы:
+
+```bash
+docker compose up --build
+```
+
+Сервер будет доступен по адресу `http://localhost:9090`.
+
+#### Остановка
+
+```bash
+docker compose down
+```
+
+Для полной очистки, включая данные базы:
+
+```bash
+docker compose down -v
+```
+
 ### Конфигурация VS Code
+
 Создайте `.vscode/launch.json`:
+
 ```json
 {
     "version": "0.2.0",

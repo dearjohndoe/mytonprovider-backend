@@ -2,7 +2,7 @@
 
 PGUSER_TO_BLOCK="postgres"
 
-PG_HBA_PATH="/etc/postgresql/15/main/pg_hba.conf"
+PG_HBA_PATH="/etc/postgresql/${PG_VERSION}/main/pg_hba.conf"
 
 cp "$PG_HBA_PATH" "${PG_HBA_PATH}.bak.$(date +%s)"
 
