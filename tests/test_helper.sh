@@ -42,7 +42,11 @@ create_stub() {
 assert_output_contains() {
   local expected="$1"
   # shellcheck disable=SC2154
-  [[ "$output" == *"$expected"* ]]
+  [[ "$output" == *"$expected"* ]] || {
+    echo "Expected output to contain: $expected"
+    echo "Actual output: $output"
+    return 1
+  }
 }
 
 assert_log_contains() {
@@ -53,6 +57,6 @@ assert_log_contains() {
 line_of_pattern() {
   local pattern="$1"
   local line
-  line=$(grep -n "$pattern" "$STUB_LOG" | head -n 1 | cut -d: -f1)
+  line=$(grep -Fn "$pattern" "$STUB_LOG" | head -n 1 | cut -d: -f1)
   echo "${line:-0}"
 }

@@ -54,3 +54,13 @@ run_script_with_overridden_cd() {
 
   [ "$status" -eq 0 ]
 }
+
+@test "run.sh exits with code 1 when backend process is not found after start" {
+  create_stub pgrep 'exit 1'
+  export SCRIPT="$PROJECT_ROOT/scripts/run.sh"
+
+  run_script_with_overridden_cd
+
+  [ "$status" -eq 1 ]
+}
+

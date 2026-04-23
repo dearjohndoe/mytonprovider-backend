@@ -22,8 +22,15 @@ teardown() {
 @test "init_db.sh prints missing variables error message" {
   run env -i PATH="$PATH" bash "$PROJECT_ROOT/scripts/init_db.sh"
 
-  [ "$status" -eq 1 ]
   assert_output_contains "Missing required environment variables"
+}
+
+@test "init_db.sh exits with code 1 when psql fails" {
+  create_stub psql 'exit 1'
+
+  run env -i PATH="$PATH" PG_USER=user PG_PASSWORD=pass PG_DB=db bash "$PROJECT_ROOT/scripts/init_db.sh"
+
+  [ "$status" -eq 1 ]
 }
 
 @test "init_db.sh passes SQL path resolved from script dirname" {
