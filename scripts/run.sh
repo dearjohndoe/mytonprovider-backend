@@ -1,6 +1,6 @@
 #!/bin/bash
 
-cd /opt/provider
+cd /opt/provider || exit
 
 mkdir -p /var/log/mytonprovider.app
 
