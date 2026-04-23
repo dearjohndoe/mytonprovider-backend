@@ -133,10 +133,11 @@ install_deps() {
 
     if ! command -v go &> /dev/null && [ ! -f /usr/local/go/bin/go ]; then
         print_status "Installing Go..."
-        wget https://go.dev/dl/go1.24.5.linux-amd64.tar.gz
-        tar -C /usr/local -xzf go1.24.5.linux-amd64.tar.gz
+        GOARCH=$(dpkg --print-architecture)
+        wget https://go.dev/dl/go1.24.5.linux-${GOARCH}.tar.gz
+        tar -C /usr/local -xzf go1.24.5.linux-${GOARCH}.tar.gz
         echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
-        rm go1.24.5.linux-amd64.tar.gz
+        rm go1.24.5.linux-${GOARCH}.tar.gz
     fi
 
     export PATH=$PATH:/usr/local/go/bin
