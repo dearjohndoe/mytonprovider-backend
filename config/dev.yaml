@@ -1,0 +1,15 @@
+system:
+  system_port: "9090"
+  system_adnl_port: "16167"
+  system_log_level: 1
+  system_store_history_days: 90
+
+metrics:
+  namespace: "ton-storage"
+  server_subsystem: "mtpo-server"
+  workers_subsystem: "mtpo-workers"
+  db_subsystem: "mtpo-db"
+
+ton:
+  config_url: "https://ton-blockchain.github.io/global.config.json"
+  batch_size: 100

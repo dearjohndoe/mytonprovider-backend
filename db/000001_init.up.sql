@@ -1,10 +1,7 @@
-
+BEGIN;
 -- SCHEMAS
 
 CREATE SCHEMA providers AUTHORIZATION pguser;
-
-CREATE SCHEMA public AUTHORIZATION pg_database_owner;
-
 CREATE SCHEMA system AUTHORIZATION pguser;
 
 -- TABLES
@@ -530,3 +527,5 @@ FOR EACH ROW EXECUTE FUNCTION providers.archive_telemetry();
 CREATE TRIGGER telemetry_archive_before_update 
 BEFORE UPDATE ON providers.telemetry 
 FOR EACH ROW EXECUTE FUNCTION providers.archive_telemetry();
+
+COMMIT;

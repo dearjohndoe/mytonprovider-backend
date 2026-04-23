@@ -1,0 +1,63 @@
+services:
+  app:
+    build: .
+    depends_on:
+      db_migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${SYSTEM_PORT}:${SYSTEM_PORT}"
+    environment:
+      - SYSTEM_PORT=${SYSTEM_PORT}
+      - CONFIG_PATH=${CONFIG_PATH}
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config:ro
+    networks:
+      - backend
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "${DB_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pguser -d providerdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    env_file:
+      - .env
+    networks:
+      - backend
+
+  db_migrate:
+    image: migrate/migrate:4
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - ./db:/db
+    restart: on-failure
+    command:
+      [
+        "-path", "/db",
+        "-database",
+        "postgres://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT}/${DB_NAME}?sslmode=disable",
+        "up"
+      ]
+    networks:
+      - backend
+
+networks:
+  backend:
+
+volumes:
+  postgres_data:

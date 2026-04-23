@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"mytonprovider-backend/pkg/config"
+	"mytonprovider-backend/pkg/metrics"
 	"os"
 	"os/signal"
 	"strings"
@@ -11,7 +13,6 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/prometheus/client_golang/prometheus"
 
 	simpleCache "mytonprovider-backend/pkg/cache"
 	"mytonprovider-backend/pkg/clients/ifconfig"
@@ -34,14 +35,14 @@ func main() {
 
 func run() (err error) {
 	// Tools
-	config := loadConfig()
-	if config == nil {
+	cfg := config.MustLoadConfig()
+	if cfg == nil {
 		fmt.Println("failed to load configuration")
 		return
 	}
 
 	logLevel := slog.LevelInfo
-	if level, ok := logLevels[config.System.LogLevel]; ok {
+	if level, ok := config.LogLevels[cfg.System.LogLevel]; ok {
 		logLevel = level
 	}
 
@@ -51,67 +52,17 @@ func run() (err error) {
 	telemetryCache := simpleCache.NewSimpleCache(2 * time.Minute)
 	benchmarksCache := simpleCache.NewSimpleCache(2 * time.Minute)
 
-	// Metrics
-	dbRequestsCount := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: config.Metrics.Namespace,
-			Subsystem: config.Metrics.DbSubsystem,
-			Name:      "db_requests_count",
-			Help:      "Db requests count",
-		},
-		[]string{"method", "error"},
-	)
-
-	dbRequestsDuration := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: config.Metrics.Namespace,
-			Subsystem: config.Metrics.DbSubsystem,
-			Name:      "db_requests_duration",
-			Help:      "Db requests duration",
-		},
-		[]string{"method", "error"},
-	)
-
-	workersRunCount := prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Namespace: config.Metrics.Namespace,
-			Subsystem: config.Metrics.DbSubsystem,
-			Name:      "workers_requests_count",
-			Help:      "Workers requests count",
-		},
-		[]string{"method", "error"},
-	)
-
-	workersRunDuration := prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Namespace: config.Metrics.Namespace,
-			Subsystem: config.Metrics.DbSubsystem,
-			Name:      "workers_requests_duration",
-			Help:      "Workers requests duration",
-		},
-		[]string{"method", "error"},
-	)
-
-	providersNetLoad := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Namespace: config.Metrics.Namespace,
-			Subsystem: config.Metrics.DbSubsystem,
-			Name:      "providers_net_load",
-			Help:      "Providers network load",
-		},
-		[]string{"provider_pubkey", "type"},
-	)
-
-	prometheus.MustRegister(
-		dbRequestsCount,
-		dbRequestsDuration,
-		workersRunCount,
-		workersRunDuration,
-		providersNetLoad,
-	)
+	// BusinessMetrics
+	metrics := metrics.NewBusinessMetrics(metrics.BusinessMetricsConfig{
+		Namespace:          cfg.Metrics.Namespace,
+		ServerSubSystem:    cfg.Metrics.ServerSubsystem,
+		WorkerSubSystem:    cfg.Metrics.WorkersSubsystem,
+		DBSubSystem:        cfg.Metrics.DbSubsystem,
+		ProvidersSubSystem: cfg.Metrics.ProvidersSubsystem,
+	})
 
 	// Clients
-	ton, err := tonclient.NewClient(context.Background(), config.TON.ConfigURL, logger)
+	ton, err := tonclient.NewClient(context.Background(), cfg.TON.ConfigURL, logger)
 	if err != nil {
 		logger.Error("failed to create TON client", slog.String("error", err.Error()))
 		return
@@ -119,14 +70,14 @@ func run() (err error) {
 
 	ipinfo := ifconfig.NewClient(logger)
 
-	dhtClient, providerClient, err := newProviderClient(context.Background(), config.TON.ConfigURL, config.System.ADNLPort, config.System.Key)
+	dhtClient, providerClient, err := newProviderClient(context.Background(), cfg.TON.ConfigURL, cfg.System.ADNLPort, cfg.System.Key)
 	if err != nil {
 		logger.Error("failed to create provider client", slog.String("error", err.Error()))
 		return
 	}
 
 	// Postgres
-	connPool, err := connectPostgres(context.Background(), config, logger)
+	connPool, err := connectPostgres(context.Background(), cfg, logger)
 	if err != nil {
 		logger.Error("failed to connect to Postgres", slog.String("error", err.Error()))
 		return
@@ -134,14 +85,14 @@ func run() (err error) {
 
 	// Database
 	providersRepo := providersRepository.NewRepository(connPool)
-	providersRepo = providersRepository.NewMetrics(dbRequestsCount, dbRequestsDuration, providersRepo)
+	providersRepo = providersRepository.NewMetrics(metrics.DBRequests, metrics.DBRequestsDuration, providersRepo)
 
 	systemRepo := systemRepository.NewRepository(connPool)
-	systemRepo = systemRepository.NewMetrics(dbRequestsCount, dbRequestsDuration, systemRepo)
+	systemRepo = systemRepository.NewMetrics(metrics.DBRequests, metrics.DBRequestsDuration, systemRepo)
 
 	// Workers
-	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache, benchmarksCache, providersNetLoad, logger)
-	telemetryWorker = telemetry.NewMetrics(workersRunCount, workersRunDuration, telemetryWorker)
+	telemetryWorker := telemetry.NewWorker(providersRepo, telemetryCache, benchmarksCache, metrics.ProvidersNetLoad, logger)
+	telemetryWorker = telemetry.NewMetrics(metrics.WorkersRequests, metrics.WorkersRequestsDuration, telemetryWorker)
 
 	providersMasterWorker := providersmaster.NewWorker(
 		providersRepo,
@@ -150,14 +101,14 @@ func run() (err error) {
 		providerClient,
 		dhtClient,
 		ipinfo,
-		config.TON.MasterAddress,
-		config.TON.BatchSize,
+		cfg.TON.MasterAddress,
+		cfg.TON.BatchSize,
 		logger,
 	)
-	providersMasterWorker = providersmaster.NewMetrics(workersRunCount, workersRunDuration, providersMasterWorker)
+	providersMasterWorker = providersmaster.NewMetrics(metrics.WorkersRequests, metrics.WorkersRequestsDuration, providersMasterWorker)
 
-	cleanerWorker := cleaner.NewWorker(providersRepo, config.System.StoreHistoryDays, logger)
-	cleanerWorker = cleaner.NewMetrics(workersRunCount, workersRunDuration, cleanerWorker)
+	cleanerWorker := cleaner.NewWorker(providersRepo, cfg.System.StoreHistoryDays, logger)
+	cleanerWorker = cleaner.NewMetrics(metrics.WorkersRequests, metrics.WorkersRequestsDuration, cleanerWorker)
 
 	cancelCtx, cancel := context.WithCancel(context.Background())
 	workers := workers.NewWorkers(telemetryWorker, providersMasterWorker, cleanerWorker, logger)
@@ -174,21 +125,21 @@ func run() (err error) {
 	providersService = providers.NewCacheMiddleware(providersService, telemetryCache, benchmarksCache)
 
 	// HTTP Server
-	accessTokens := strings.Split(config.System.AccessTokens, ",")
+	accessTokens := strings.Split(cfg.System.AccessTokens, ",")
 	app := fiber.New()
 	server := httpServer.New(
 		app,
 		providersService,
 		accessTokens,
-		config.Metrics.Namespace,
-		config.Metrics.ServerSubsystem,
+		cfg.Metrics.Namespace,
+		cfg.Metrics.ServerSubsystem,
 		logger,
 	)
 
 	server.RegisterRoutes()
 
 	go func() {
-		if err := app.Listen(":" + config.System.Port); err != nil {
+		if err := app.Listen(":" + cfg.System.Port); err != nil {
 			logger.Error("error starting server", slog.String("err", err.Error()))
 		}
 	}()
