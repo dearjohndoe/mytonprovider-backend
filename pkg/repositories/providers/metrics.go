@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"mytonprovider-backend/pkg/models/db"
@@ -14,6 +15,12 @@ type metricsMiddleware struct {
 	reqCount    *prometheus.CounterVec
 	reqDuration *prometheus.HistogramVec
 	repo        Repository
+}
+
+// WithTx прозрачен относительно транзакции: возвращает чистый repo (без
+// метрик), чтобы tx-bound операции шли мимо обёртки.
+func (m *metricsMiddleware) WithTx(tx pgx.Tx) Repository {
+	return m.repo.WithTx(tx)
 }
 
 func (m *metricsMiddleware) GetProvidersByPubkeys(ctx context.Context, pubkeys []string) (providers []db.ProviderDB, err error) {

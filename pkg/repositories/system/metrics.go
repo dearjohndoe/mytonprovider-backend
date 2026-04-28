@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -34,6 +35,28 @@ func (m *metricsMiddleware) GetParam(ctx context.Context, key string) (value str
 		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
 	}(time.Now())
 	return m.repo.GetParam(ctx, key)
+}
+
+func (m *metricsMiddleware) WithTx(tx pgx.Tx) Repository {
+	// metrics middleware прозрачен относительно транзакции:
+	// возвращаем чистый repo (без метрик), чтобы tx-bound операции
+	// шли мимо обёртки и не путали observability.
+	return m.repo.WithTx(tx)
+}
+
+func (m *metricsMiddleware) MarkProcessedTx(
+	ctx context.Context,
+	tx pgx.Tx,
+	jobID, jobType, agentID string,
+) (inserted bool, err error) {
+	defer func(s time.Time) {
+		labels := []string{
+			"MarkProcessedTx", strconv.FormatBool(err != nil),
+		}
+		m.reqCount.WithLabelValues(labels...).Add(1)
+		m.reqDuration.WithLabelValues(labels...).Observe(time.Since(s).Seconds())
+	}(time.Now())
+	return m.repo.MarkProcessedTx(ctx, tx, jobID, jobType, agentID)
 }
 
 func NewMetrics(reqCount *prometheus.CounterVec, reqDuration *prometheus.HistogramVec, repo Repository) Repository {

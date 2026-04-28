@@ -26,8 +26,9 @@ else
     PROTOCOL="http"
 fi
 
-echo "Replacing backend host in lib/api.ts with $PROTOCOL://$HOST"
-sed -i "s|https://mytonprovider.org|$PROTOCOL://$HOST|g" lib/api.ts
+BACKEND_HOST="${DOMAIN:-$HOST}"
+echo "Replacing backend host in lib/api.ts with $PROTOCOL://$BACKEND_HOST"
+sed -i "s|https://mytonprovider.org|$PROTOCOL://$BACKEND_HOST|g" lib/api.ts
 
 
 echo "Installing npm dependencies..."

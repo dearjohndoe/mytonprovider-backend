@@ -1,150 +1,164 @@
 #!/bin/bash
 
-# Main server setup script that automates the entire server configuration process
-# This script runs directly on the target server, downloads all necessary scripts
-# from GitHub, installs PostgreSQL, configures Nginx, sets up log rotation,
-# installs the backend application, secures the server, and initializes the database.
+# Main server setup script — configures a fresh server using Docker Compose.
 #
-# Usage: Download and run with environment variables:
+# Usage:
 # wget https://raw.githubusercontent.com/dearjohndoe/mytonprovider-backend/master/scripts/setup_server.sh
 # chmod +x setup_server.sh
-# PG_USER=<pguser> PG_PASSWORD=<pgpassword> PG_DB=<database> \
+# DB_HOST=<host> DB_USER=<user> DB_PASSWORD=<password> DB_NAME=<db> \
+# MASTER_ADDRESS=<ton-master-wallet> \
+# NEWSUDOUSER=<newuser> NEWUSER_PASSWORD=<password> \
 # NEWFRONTENDUSER=<frontenduser> \
-# NEWSUDOUSER=<newuser> NEWUSER_PASSWORD=<newpassword> \
-# DOMAIN=<domain> INSTALL_SSL=<true|false> APP_USER=<appuser> \
+# DOMAIN=<domain> INSTALL_SSL=<true|false> \
+# [TAILSCALE_AUTHKEY=tskey-auth-...] \
 # ./setup_server.sh
+#
+# Optional vars:
+#   TAILSCALE_AUTHKEY  — if set, installs tailscale and joins the tailnet
+#                        (so agents from other VPS can reach redis/postgres
+#                        over the private network).
 
 set -e
 
-PG_VERSION="15"
 GITHUB_REPO="dearjohndoe/mytonprovider-backend"
 GITHUB_BRANCH="master"
-SCRIPTS_BASE_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH/scripts"
-DB_BASE_URL="https://raw.githubusercontent.com/$GITHUB_REPO/$GITHUB_BRANCH/db"
-WORK_DIR="/tmp/provider"
+WORK_DIR="${WORK_DIR:-/opt/provider}"
+
+DB_PORT="${DB_PORT:-5432}"
+SYSTEM_PORT="${SYSTEM_PORT:-9090}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+print_status()  { echo -e "${BLUE}[INFO]${NC} $1"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+print_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
 check_required_vars() {
     local required_vars=(
-        "PG_USER"
-        "PG_PASSWORD"
-        "PG_DB"
-        "NEWSUDOUSER"
+        "DB_HOST" "DB_USER" "DB_PASSWORD" "DB_NAME"
+        "MASTER_ADDRESS"
+        "NEWSUDOUSER" "NEWUSER_PASSWORD"
         "NEWFRONTENDUSER"
-        "NEWUSER_PASSWORD"
     )
-    
     local missing_vars=()
-    
     for var in "${required_vars[@]}"; do
         if [[ -z "${!var}" ]]; then
             missing_vars+=("$var")
         fi
     done
-    
     if [[ ${#missing_vars[@]} -gt 0 ]]; then
         print_error "Missing required environment variables:"
-        for var in "${missing_vars[@]}"; do
-            echo "  - $var"
-        done
+        for var in "${missing_vars[@]}"; do echo "  - $var"; done
         echo ""
         echo "Usage example:"
-        echo "PG_USER=pguser PG_PASSWORD=secret PG_DB=providerdb \\"
-        echo "NEWFRONTENDUSER=frontend \\"
+        echo "DB_USER=pguser DB_PASSWORD=secret DB_NAME=providerdb \\"
         echo "NEWSUDOUSER=johndoe NEWUSER_PASSWORD=newsecurepassword \\"
+        echo "NEWFRONTENDUSER=frontend \\"
         echo "DOMAIN=mytonprovider.org INSTALL_SSL=true \\"
         echo "./setup_server.sh"
-        echo ""
-        echo "Note: DOMAIN is optional. If not provided, will use server's hostname/IP."
-        echo "      SSL certificates require a domain name."
-        exit 1
-    fi
-}
-
-setup_work_directory() {
-    print_status "Setting up work directory..."
-
-    if [ -d "mytonprovider-backend" ]; then
-        echo "Repository exists, pulling latest changes..."
-        cd mytonprovider-backend || exit 1
-        git pull origin master
-    else
-        echo "Cloning repository..."
-        git clone https://github.com/dearjohndoe/mytonprovider-backend
-    fi
-    
-    print_success "Work directory set up successfully."
-}
-
-execute_script() {
-    local script_name=$1
-    
-    if [[ ! -f "$script_name" ]]; then
-        print_error "Script not found: $script_name"
-        exit 1
-    fi
-    
-    local env_vars=""
-    local vars_to_pass=(
-        "PG_VERSION" "PG_USER" "PG_PASSWORD" "PG_DB"
-        "NEWFRONTENDUSER" "WORK_DIR"
-        "NEWSUDOUSER" "NEWUSER_PASSWORD" "DOMAIN" "INSTALL_SSL"
-    )
-    
-    for var in "${vars_to_pass[@]}"; do
-        if [[ -n "${!var}" ]]; then
-            export $var="${!var}"
-        fi
-    done
-
-    if ! bash "$script_name"; then
-        print_error "Script $script_name failed with exit code $?"
         exit 1
     fi
 }
 
 install_deps() {
-    print_status "Installing required dependencies..."
-    
+    print_status "Installing system dependencies..."
+    export DEBIAN_FRONTEND=noninteractive
     apt-get update
-    apt-get upgrade -y
-    apt-get install -y wget curl gnupg lsb-release git
+    apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" upgrade
+    apt-get install -y curl git ca-certificates gnupg lsb-release
+}
 
-    if ! command -v go &> /dev/null && [ ! -f /usr/local/go/bin/go ]; then
-        print_status "Installing Go..."
-        wget https://go.dev/dl/go1.24.5.linux-amd64.tar.gz
-        tar -C /usr/local -xzf go1.24.5.linux-amd64.tar.gz
-        echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile
-        rm go1.24.5.linux-amd64.tar.gz
+install_tailscale() {
+    [[ -z "$TAILSCALE_AUTHKEY" ]] && return
+    if command -v tailscale &>/dev/null; then
+        print_status "Tailscale already installed: $(tailscale version | head -n1)"
+    else
+        print_status "Installing Tailscale..."
+        curl -fsSL https://tailscale.com/install.sh | sh
+    fi
+    if tailscale ip -4 &>/dev/null; then
+        print_status "Tailscale already up: $(tailscale ip -4 | head -n1)"
+    else
+        local hostname_arg=""
+        [[ -n "$TAILSCALE_HOSTNAME" ]] && hostname_arg="--hostname=$TAILSCALE_HOSTNAME"
+        tailscale up --authkey="$TAILSCALE_AUTHKEY" --ssh=false $hostname_arg
+        print_success "Tailscale up: $(tailscale ip -4 | head -n1)"
+    fi
+}
+
+install_docker() {
+    local os_id
+    os_id=$(. /etc/os-release && echo "$ID")
+    if [[ "$os_id" != "debian" && "$os_id" != "ubuntu" ]]; then
+        os_id="ubuntu"
     fi
 
-    export PATH=$PATH:/usr/local/go/bin
-
-    if ! command -v node &> /dev/null; then
-        wget -qO- https://deb.nodesource.com/setup_20.x | bash -
-        apt-get install -y nodejs
+    local need_install=false
+    if ! command -v docker &>/dev/null; then
+        need_install=true
+    elif ! docker compose version &>/dev/null; then
+        print_status "Docker present but 'docker compose' plugin missing; installing compose plugin."
+        need_install=true
     fi
+
+    if ! $need_install; then
+        print_status "Docker already installed: $(docker --version)"
+        return
+    fi
+
+    print_status "Installing Docker (repo for $os_id)..."
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL "https://download.docker.com/linux/$os_id/gpg" \
+        | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+https://download.docker.com/linux/$os_id $(lsb_release -cs) stable" \
+        > /etc/apt/sources.list.d/docker.list
+    apt-get update
+    apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+    systemctl enable docker
+    systemctl start docker
+    print_success "Docker installed."
+}
+
+clone_repo() {
+    print_status "Setting up repository in $WORK_DIR..."
+    if [ -d "$WORK_DIR/.git" ]; then
+        print_status "Repository exists, fetching $GITHUB_BRANCH..."
+        git -C "$WORK_DIR" fetch origin "$GITHUB_BRANCH"
+        git -C "$WORK_DIR" checkout "$GITHUB_BRANCH"
+        git -C "$WORK_DIR" reset --hard "origin/$GITHUB_BRANCH"
+    else
+        git clone --branch "$GITHUB_BRANCH" "https://github.com/$GITHUB_REPO" "$WORK_DIR"
+    fi
+    print_success "Repository ready."
+}
+
+create_env_file() {
+    print_status "Creating .env file..."
+    cat > "$WORK_DIR/.env" <<EOL
+DB_HOST=${DB_HOST}
+DB_USER=${DB_USER}
+MASTER_ADDRESS=${MASTER_ADDRESS}
+DB_PASSWORD=${DB_PASSWORD}
+DB_NAME=${DB_NAME}
+DB_PORT=${DB_PORT}
+SYSTEM_PORT=${SYSTEM_PORT}
+CONFIG_PATH=${CONFIG_PATH:-config/dev.yaml}
+EOL
+    chmod 600 "$WORK_DIR/.env"
+    print_success ".env file created."
+}
+
+start_app() {
+    print_status "Starting application with Docker Compose..."
+    docker compose -f "$WORK_DIR/docker-compose.yml" up -d --build
+    print_success "Application started."
 }
 
 get_server_info() {
@@ -152,109 +166,95 @@ get_server_info() {
     if [[ -z "$HOST" ]]; then
         HOST=$(hostname -f)
     fi
-    
-    print_status "Detected server information:"
-    echo "Server IP/Hostname: $HOST"
+}
+
+execute_script() {
+    local script="$WORK_DIR/scripts/$1"
+    if [[ ! -f "$script" ]]; then
+        print_error "Script not found: $script"
+        exit 1
+    fi
+    local vars_to_pass=(
+        "NEWSUDOUSER" "NEWUSER_PASSWORD" "NEWFRONTENDUSER"
+        "DOMAIN" "INSTALL_SSL" "HOST" "SYSTEM_PORT"
+    )
+    for var in "${vars_to_pass[@]}"; do
+        [[ -n "${!var}" ]] && export "$var=${!var}"
+    done
+    if ! bash "$script"; then
+        print_error "Script $1 failed"
+        exit 1
+    fi
 }
 
 main() {
-    print_status "Starting server setup process..."
-    
     if [[ $EUID -ne 0 ]]; then
         print_error "This script must be run as root"
-        echo "Please run: sudo $0"
         exit 1
     fi
 
-    mkdir -p "$WORK_DIR"
-    cd "$WORK_DIR" || exit 1
-
+    print_status "Starting server setup..."
     check_required_vars
-
     install_deps
-    
+    install_docker
+    install_tailscale
     get_server_info
-    
     DOMAIN="${DOMAIN:-$HOST}"
-    
-    print_status "All required environment variables are set"
-    echo "Server IP/Hostname: $HOST"
-    echo "New sudo user: $NEWSUDOUSER"
-    echo "New frontend user: $NEWFRONTENDUSER"
-    echo "PostgreSQL version: $PG_VERSION"
-    echo "PostgreSQL database: $PG_DB"
-    echo "Domain/IP: $DOMAIN"
-    echo ""
-    
-    print_status "Step 1: Downloading scripts and configuration files..."
-    setup_work_directory
-    cd "$WORK_DIR/mytonprovider-backend/scripts" || exit 1
-    
-    print_status "Step 2: Setting up PostgreSQL..."
-    execute_script "psql_setup.sh"
-    
-    print_status "Step 3: Disabling postgres user remote access..."
-    execute_script "ib_disable_postgres_user.sh"
-    
-    print_status "Step 4: Initializing database..."
-    execute_script "init_db.sh"
-    
-    print_status "Step 5: Setting up Nginx..."
-    execute_script "setup_nginx.sh"
-    
-    print_status "Step 6: Setting up log rotation..."
-    execute_script "logs_rotation.sh"
-    
-    print_status "Step 7: Securing the server..."
-    export PASSWORD="$NEWUSER_PASSWORD"  # secure_server.sh expects PASSWORD env var
-    execute_script "secure_server.sh"
-    
-    print_status "Step 8: Building backend application..."
-    execute_script "build_backend.sh"
-    
-    print_status "Step 9: Running the backend application..."
-    su - "$NEWSUDOUSER" -c "cd $WORK_DIR/mytonprovider-backend/scripts && bash run.sh"
 
-    print_status "Step 10: Building and deploying frontend..."
-    su - "$NEWFRONTENDUSER" -c "cd $WORK_DIR/mytonprovider-backend/scripts && HOST='$HOST' DOMAIN='$DOMAIN' INSTALL_SSL='$INSTALL_SSL' bash build_frontend.sh"
+    if [[ "${SKIP_CLONE:-false}" == "true" ]]; then
+        print_warning "Step 1: SKIP_CLONE=true — using existing $WORK_DIR."
+        if [[ ! -d "$WORK_DIR" ]]; then
+            print_error "SKIP_CLONE=true but $WORK_DIR does not exist."
+            exit 1
+        fi
+    else
+        print_status "Step 1: Cloning repository..."
+        clone_repo
+    fi
+
+    print_status "Step 2: Creating application configuration..."
+    create_env_file
+
+    if [[ "${SKIP_APP_START:-false}" == "true" ]]; then
+        print_warning "Step 3: SKIP_APP_START=true — skipping docker compose up."
+    else
+        print_status "Step 3: Starting application stack..."
+        start_app
+    fi
+
+    print_status "Step 4: Setting up Nginx..."
+    execute_script "setup_nginx.sh"
+
+    print_status "Step 5: Securing the server..."
+    export PASSWORD="$NEWUSER_PASSWORD"
+    execute_script "secure_server.sh"
+
+    if [[ "${SKIP_FRONTEND:-false}" == "true" ]]; then
+        print_warning "Step 6: SKIP_FRONTEND=true — skipping frontend build."
+    else
+        print_status "Step 6: Building and deploying frontend..."
+        su - "$NEWFRONTENDUSER" -c "cd $WORK_DIR/scripts && HOST='$HOST' DOMAIN='$DOMAIN' INSTALL_SSL='$INSTALL_SSL' bash build_frontend.sh"
+    fi
 
     print_success "Server setup completed successfully!"
     echo ""
     echo "Summary:"
-    echo "✅ All scripts downloaded from GitHub"
-    echo "✅ SSH key authentication configured"
-    echo "✅ PostgreSQL $PG_VERSION installed and configured"
-    echo "✅ Database '$PG_DB' initialized"
-    echo "✅ Nginx installed and configured"
-    echo "✅ Log rotation configured"
-    echo "✅ Backend application installed"
-    echo "✅ Server secured with user '$NEWSUDOUSER'"
-    echo "✅ Frontend application built and deployed"
-    echo "✅ Frontend user created: $NEWFRONTENDUSER"
+    echo "  Docker Compose stack: running"
+    echo "  Nginx: configured"
+    echo "  SSH user: $NEWSUDOUSER"
+    echo "  Frontend user: $NEWFRONTENDUSER"
+    echo "  Domain: $DOMAIN"
     echo ""
-    echo "You can now connect to your server using:"
-    echo "ssh $NEWSUDOUSER@$HOST"
-    echo "from there you can also connect as the frontend user using:"
-    echo "sudo su $NEWFRONTENDUSER"
+    echo "Useful commands:"
+    echo "  View logs:    docker compose -f $WORK_DIR/docker-compose.yml logs -f app"
+    echo "  Restart app:  docker compose -f $WORK_DIR/docker-compose.yml restart app"
+    echo "  Stop all:     docker compose -f $WORK_DIR/docker-compose.yml down"
     echo ""
     echo "Web services:"
-    echo "Website: http://$DOMAIN"
-    echo "API: http://$DOMAIN/api/"
-    echo "Health check: http://$DOMAIN/health"
-    echo "Metrics: http://$DOMAIN/metrics"
-    echo ""
-    echo "Backend application:"
-    echo "Install directory: /opt/provider"
-    echo "Start service: cd /opt/provider && env \$(cat config.env | xargs) ./mtpo-backend >> /var/log/mytonprovider.app/mytonprovider.app.log 2>&1 &"
-    echo "View logs: tail -f /var/log/mytonprovider.app/mytonprovider.app.log"
-    echo ""
-    echo "Database connection details:"
-    echo "Host: $HOST"
-    echo "Port: 5432"
-    echo "Database: $PG_DB"
-    echo "User: $PG_USER"
-    echo ""
-    echo "Cleanup: rm -rf $WORK_DIR"
+    echo "  Website:      http://$DOMAIN"
+    echo "  API:          http://$DOMAIN/api/"
+    echo "  Health check: http://$DOMAIN/health"
+    echo "  Metrics:      http://$DOMAIN/metrics"
 }
 
 main "$@"

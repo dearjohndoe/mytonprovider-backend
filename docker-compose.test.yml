@@ -1,0 +1,45 @@
+services:
+  tester:
+    image: debian:12
+    privileged: true
+    working_dir: ${PWD}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}:${PWD}:rw
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+    tmpfs:
+      - /run
+      - /run/lock
+    stop_signal: SIGRTMIN+3
+    environment:
+      - WORK_DIR=${PWD}
+      - DB_HOST=db
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - NEWSUDOUSER=testuser
+      - NEWUSER_PASSWORD=testpassword
+      - NEWFRONTENDUSER=frontend
+      - DOMAIN=127.0.0.1
+      - INSTALL_SSL=false
+      - SKIP_CLONE=true
+      - SKIP_APP_START=false
+      - SKIP_FRONTEND=false
+    command: >
+      bash -c "set -e &&
+      export DEBIAN_FRONTEND=noninteractive &&
+      apt-get update &&
+      apt-get install -y curl ca-certificates gnupg lsb-release sudo openssh-client &&
+      install -m 0755 -d /etc/apt/keyrings &&
+      curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor --yes -o /etc/apt/keyrings/docker.gpg &&
+      chmod a+r /etc/apt/keyrings/docker.gpg &&
+      echo \"deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable\" > /etc/apt/sources.list.d/docker.list &&
+      apt-get update &&
+      apt-get install -y docker-ce-cli docker-compose-plugin &&
+      mkdir -p /root/.ssh && chmod 700 /root/.ssh &&
+      ssh-keygen -t ed25519 -N '' -f /root/.ssh/id_ed25519 -C 'test@mock' -q &&
+      cp /root/.ssh/id_ed25519.pub /root/.ssh/authorized_keys &&
+      chmod 600 /root/.ssh/authorized_keys &&
+      bash ${PWD}/scripts/setup_server.sh"
+    env_file:
+      - .env

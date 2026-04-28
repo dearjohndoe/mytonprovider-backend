@@ -8,13 +8,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"mytonprovider-backend/pkg/models/db"
+	"mytonprovider-backend/pkg/repositories"
 )
 
 type repository struct {
-	db *pgxpool.Pool
+	db repositories.DBTX
 }
 
 type Repository interface {
+	// WithTx возвращает Repository, привязанный к транзакции tx.
+	WithTx(tx pgx.Tx) Repository
+
 	GetProvidersByPubkeys(ctx context.Context, pubkeys []string) (providers []db.ProviderDB, err error)
 	GetFilteredProviders(ctx context.Context, filters db.ProviderFilters, sort db.ProviderSort, limit, offset int) (providers []db.ProviderDB, err error)
 	GetFiltersRange(ctx context.Context) (filtersRange db.FiltersRange, err error)
@@ -1042,4 +1046,8 @@ func NewRepository(db *pgxpool.Pool) Repository {
 	return &repository{
 		db: db,
 	}
+}
+
+func (r *repository) WithTx(tx pgx.Tx) Repository {
+	return &repository{db: tx}
 }

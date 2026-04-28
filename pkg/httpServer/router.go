@@ -4,6 +4,7 @@
 package httpServer
 
 import (
+	"mytonprovider-backend/pkg/metrics"
 	"time"
 
 	"github.com/gofiber/fiber/v2/middleware/limiter"
@@ -17,9 +18,13 @@ const (
 func (h *handler) RegisterRoutes() {
 	h.logger.Info("Registering routes")
 
-	m := newMetrics(h.namespace, h.subsystem)
+	m := metrics.NewNetMetrics(metrics.NetMetricsConfig{
+		Namespace: h.namespace,
+		SubSystem: h.subsystem,
+	})
 
-	h.server.Use(m.metricsMiddleware)
+	metricsMiddleware := NewMetricsMiddleware(m)
+	h.server.Use(metricsMiddleware)
 
 	h.server.Use(limiter.New(limiter.Config{
 		Max:               MaxRequests,

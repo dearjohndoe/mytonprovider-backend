@@ -1,92 +1,87 @@
 #!/bin/bash
 
-# Use it if server is not configured for SSH public key authentication
-# This script sets up a secure SSH connection to a remote server by copying the local RSA public key to the remote server's authorized keys.
-# It also configures the remote server to disable password authentication and enable public key authentication.
-# Usage: USERNAME=<username> HOST=<host> PASSWORD=<password> ./init_server_connection.sh
+# Bootstraps SSH key auth on a fresh server when only password access is
+# available. Copies the local public key to the remote authorized_keys and
+# disables password authentication.
+#
+# Usage: USERNAME=root HOST=1.2.3.4 PASSWORD=yourpassword ./init_server_connection.sh
+
+set -e
 
 if [ -z "$USERNAME" ] || [ -z "$HOST" ] || [ -z "$PASSWORD" ]; then
-  echo "❌ Missing required environment variables"
-  echo ""
-  echo "Usage example: USERNAME=root HOST=123.45.67.89 PASSWORD=yourpassword ./init_server_connection.sh"
-  exit 1
+    echo "❌ Missing USERNAME / HOST / PASSWORD"
+    echo "Usage: USERNAME=root HOST=1.2.3.4 PASSWORD=yourpassword $0"
+    exit 1
 fi
 
-if [[ "$PASSWORD" =~ [\'\"\`\$\\\;\|] ]]; then
-  echo "❌ Password contains characters: ' \" \` \$ \\ ; |"
-  echo "Please use a password without these special characters for correct script execution."
-  exit 1
+if ! command -v sshpass &>/dev/null; then
+    echo "❌ sshpass not found. Install: sudo apt-get install sshpass"
+    exit 1
 fi
 
-if ! command -v sshpass &> /dev/null; then
-  echo "❌ sshpass not found, please install it first."
-  echo "You can install it using: sudo apt-get install sshpass"
-  exit 1
+KEY="${HOME}/.ssh/id_ed25519"
+KEY_PUB="${KEY}.pub"
+if [ ! -f "$KEY_PUB" ]; then
+    if [ -f "${HOME}/.ssh/id_rsa.pub" ]; then
+        # Prefer existing RSA key over generating a new one
+        KEY_PUB="${HOME}/.ssh/id_rsa.pub"
+    else
+        echo "Generating ed25519 SSH key..."
+        mkdir -p "${HOME}/.ssh"
+        ssh-keygen -t ed25519 -f "$KEY" -N ""
+    fi
 fi
 
-ESCAPED_PASSWORD=$(printf '%q' "$PASSWORD")
+PUBKEY=$(cat "$KEY_PUB")
 
 if [ "$USERNAME" = "root" ]; then
-  SSH_DIR="/root/.ssh"
+    SSH_DIR="/root/.ssh"
 else
-  SSH_DIR="/home/$USERNAME/.ssh"
+    SSH_DIR="/home/$USERNAME/.ssh"
 fi
 
-if [ ! -f ~/.ssh/id_rsa.pub ]; then
-  echo "RSA key not found, generating..."
-  mkdir -p ~/.ssh
-  ssh-keygen -t rsa -b 2048 -f ~/.ssh/id_rsa -N ""
-fi
+# sshpass -e reads from $SSHPASS — avoids shell-quoting the password twice
+export SSHPASS="$PASSWORD"
 
-PUBLIC_KEY=$(cat ~/.ssh/id_rsa.pub)
-
-sshpass -p "$ESCAPED_PASSWORD" ssh -o StrictHostKeyChecking=no -tt "$USERNAME"@"$HOST" << EOF
-mkdir -p $SSH_DIR
-chmod 700 $SSH_DIR
-echo "$PUBLIC_KEY" >> $SSH_DIR/authorized_keys
-chmod 600 $SSH_DIR/authorized_keys
-echo "SSH keys setup completed"
-exit
+sshpass -e ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no \
+    "$USERNAME@$HOST" bash <<EOF
+set -e
+mkdir -p "$SSH_DIR"
+chmod 700 "$SSH_DIR"
+grep -qxF '$PUBKEY' "$SSH_DIR/authorized_keys" 2>/dev/null \
+    || echo '$PUBKEY' >> "$SSH_DIR/authorized_keys"
+chmod 600 "$SSH_DIR/authorized_keys"
+echo "SSH key installed."
 EOF
 
-SSH_RESULT=$?
-if [ $SSH_RESULT -ne 0 ]; then
-  echo "❌ Failed to setup SSH keys on remote server (exit code: $SSH_RESULT)"
-  echo "This might be due to:"
-  echo "  - Wrong username, host, or password"
-  echo "  - SSH connection issues"
-  echo "  - Permission problems on remote server"
-  exit 1
+if [ $? -ne 0 ]; then
+    echo "❌ Failed to install public key on remote (check creds / connectivity)."
+    unset SSHPASS
+    exit 1
 fi
+echo "✅ SSH keys copied successfully."
 
-echo "✅ SSH keys copied successfully"
+sshpass -e ssh -o StrictHostKeyChecking=no -o PubkeyAuthentication=no \
+    "$USERNAME@$HOST" bash <<'EOF'
+set -e
+sed -i -E 's/^#?\s*PasswordAuthentication\s+\S+/PasswordAuthentication no/'                  /etc/ssh/sshd_config
+sed -i -E 's/^#?\s*ChallengeResponseAuthentication\s+\S+/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
+sed -i -E 's/^#?\s*UsePAM\s+\S+/UsePAM no/'                                                  /etc/ssh/sshd_config
+sed -i -E 's/^#?\s*PubkeyAuthentication\s+\S+/PubkeyAuthentication yes/'                     /etc/ssh/sshd_config
 
-sshpass -p "$ESCAPED_PASSWORD" ssh -o StrictHostKeyChecking=no -tt "$USERNAME"@"$HOST" << EOF
-
-sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sed -i 's/^#*ChallengeResponseAuthentication.*/ChallengeResponseAuthentication no/' /etc/ssh/sshd_config
-sed -i 's/^#*UsePAM.*/UsePAM no/' /etc/ssh/sshd_config
-sed -i 's/^#*PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
-
-systemctl restart ssh || systemctl restart sshd || service ssh restart || service sshd restart
-echo "SSH config updated and service restarted"
-exit
+systemctl restart ssh 2>/dev/null || systemctl restart sshd 2>/dev/null \
+    || service ssh restart 2>/dev/null || service sshd restart 2>/dev/null || true
+echo "SSH config updated."
 EOF
 
-SSH_CONFIG_RESULT=$?
-if [ $SSH_CONFIG_RESULT -ne 0 ]; then
-  echo "⚠️  Warning: Failed to update SSH config (exit code: $SSH_CONFIG_RESULT)"
-  echo "You may need to manually disable password authentication"
-else
-  echo "✅ SSH configuration updated successfully"
+unset SSHPASS
+
+sleep 3
+if ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no \
+    "$USERNAME@$HOST" "echo ok" >/dev/null 2>&1; then
+    echo "✅ SSH key authentication verified."
+    exit 0
 fi
 
-sleep 5
-
-if ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=no "$USERNAME"@"$HOST" "echo 'SSH key authentication successful'" 2>/dev/null; then
-  echo "SSH key authentication is working as expected."
-  exit 0
-fi
-
-echo "❌ SSH key authentication failed."
+echo "❌ SSH key authentication failed — check sshd config on the host."
 exit 1

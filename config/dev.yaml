@@ -1,0 +1,32 @@
+system:
+  system_port: "9090"
+  system_log_level: 1
+  system_store_history_days: 90
+
+metrics:
+  namespace: "ton-storage"
+  server_subsystem: "mtpo-server"
+  workers_subsystem: "mtpo-workers"
+  db_subsystem: "mtpo-db"
+  providers_subsystem: "mtpo-provider"
+
+redis:
+  addr: "redis:6379"
+  group: "mtpa-backend"
+  stream_prefix: "mtpa"
+  trigger_maxlen: 10000
+  block_ms: 5000
+  parallel: 1
+
+# Расписание циклов. Бэкенд периодически кладёт триггеры в `mtpa:cycle:<type>`,
+# агенты читают и публикуют результаты в `mtpa:result:<type>`.
+# single_inflight=true → не плодить параллельные триггеры пока предыдущий
+# не отработан (защита от гонок на лёгких циклах с общим LT-курсором).
+cycles:
+  scan_master:       { enabled: true, interval: 5m,  single_inflight: true  }
+  scan_wallets:      { enabled: true, interval: 30m, single_inflight: true  }
+  resolve_endpoints: { enabled: true, interval: 30m, single_inflight: true  }
+  probe_rates:       { enabled: true, interval: 1m,  single_inflight: true  }
+  inspect_contracts: { enabled: true, interval: 30m, single_inflight: true  }
+  check_proofs:      { enabled: true, interval: 60m, single_inflight: true  }
+  lookup_ipinfo:     { enabled: true, interval: 4h,  single_inflight: true  }

@@ -6,6 +6,26 @@
 
 set -e
 
+svc_enable() {
+    if [ -d /run/systemd/system ] && command -v systemctl &>/dev/null; then
+        systemctl enable "$1"
+    else
+        echo "No systemd detected — skipping 'enable $1'."
+    fi
+}
+
+svc_restart() {
+    if [ -d /run/systemd/system ] && command -v systemctl &>/dev/null; then
+        systemctl restart "$1"
+    elif [ -x "/etc/init.d/$1" ]; then
+        "/etc/init.d/$1" restart || "/etc/init.d/$1" start || echo "⚠️  init.d $1 failed — continuing."
+    elif command -v service &>/dev/null; then
+        service "$1" restart || service "$1" start || echo "⚠️  service $1 failed — continuing."
+    else
+        echo "No init system detected — skipping 'restart $1'."
+    fi
+}
+
 DOMAIN="${DOMAIN:-mytonprovider.org}"
 # Use IP address if no domain is provided or if DOMAIN is an IP
 if [[ "$DOMAIN" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -124,8 +144,8 @@ chown -R www-data:www-data "$WEB_ROOT"
 chmod -R 755 "$WEB_ROOT"
 
 echo "Starting Nginx..."
-systemctl enable nginx
-systemctl restart nginx
+svc_enable nginx
+svc_restart nginx
 
 install_ssl() {
     echo "Installing SSL certificate with Let's Encrypt..."
