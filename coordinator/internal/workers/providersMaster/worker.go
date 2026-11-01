@@ -1419,7 +1419,7 @@ func (w *providersMasterWorker) updateProvidersIPs(ctx context.Context, storageC
 	return w.refreshProvidersEndpoints(ctx, storageContracts, false, recorder)
 }
 
-func (w *providersMasterWorker) findStorageIPOverlay(ctx context.Context, providerIP string, contracts []db.ContractToProviderRelation, log *slog.Logger) (ip db.IPInfo, err error) {
+func (w *providersMasterWorker) findStorageIPOverlay(ctx context.Context, providerIP string, contracts []db.ContractToProviderRelation, known db.IPInfo, log *slog.Logger) (ip db.IPInfo, err error) {
 	if len(contracts) == 0 {
 		err = fmt.Errorf("no contracts provided")
 		return
@@ -1440,6 +1440,8 @@ func (w *providersMasterWorker) findStorageIPOverlay(ctx context.Context, provid
 	rand.Shuffle(len(shuffled), func(i, j int) {
 		shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
 	})
+
+	candidates := make(map[string]*overlayStorageCandidate)
 
 	for i := 0; i < bagsToCheck && i < len(shuffled); i++ {
 		sc := shuffled[i]
@@ -1466,6 +1468,7 @@ func (w *providersMasterWorker) findStorageIPOverlay(ctx context.Context, provid
 			continue
 		}
 
+		seen := make(map[string]struct{})
 		for _, node := range nodesList.List {
 			key, ok := node.ID.(keys.PublicKeyED25519)
 			if !ok {
@@ -1498,19 +1501,45 @@ func (w *providersMasterWorker) findStorageIPOverlay(ctx context.Context, provid
 				if addrIP == nil {
 					continue
 				}
-				if addrIP.String() == providerIP {
-					ip.PublicKey = pubKey
-					ip.IP = addrIP.String()
-					ip.Port = adnladdress.PortValue(addr)
-
-					log.Info("found storage IP via overlay DHT", "provider_pubkey", sc.ProviderPublicKey, "ip", ip.IP, "port", ip.Port)
-					return
+				if addrIP.String() != providerIP {
+					continue
 				}
+
+				id := overlayCandidateKey(pubKey)
+				if _, ok := seen[id]; ok {
+					continue
+				}
+				seen[id] = struct{}{}
+
+				c := candidates[id]
+				if c == nil {
+					c = &overlayStorageCandidate{
+						PublicKey: append(ed25519.PublicKey(nil), pubKey...),
+						IP:        addrIP.String(),
+						Port:      adnladdress.PortValue(addr),
+					}
+					candidates[id] = c
+				}
+				c.Bags++
+				break
 			}
 		}
 	}
 
-	err = fmt.Errorf("storage IP not found via overlay DHT after checking %d bags", bagsToCheck)
+	ip, err = pickOverlayStorage(candidates, known)
+	if err != nil {
+		if len(candidates) == 0 {
+			err = fmt.Errorf("storage IP not found via overlay DHT after checking %d bags", bagsToCheck)
+		}
+		return
+	}
+
+	log.Info("found storage IP via overlay DHT",
+		"candidates", len(candidates),
+		"top_bags", overlayTopBags(candidates),
+		"known_bags", overlayCandidateBags(candidates, known.PublicKey),
+		"ip", ip.IP,
+		"port", ip.Port)
 	return
 }
 

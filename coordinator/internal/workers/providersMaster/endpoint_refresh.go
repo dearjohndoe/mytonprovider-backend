@@ -255,7 +255,7 @@ func (w *providersMasterWorker) refreshProvidersEndpoints(ctx context.Context, s
 			continue
 		}
 
-		storageIP, overlayErr := w.findStorageIPOverlay(ctx, ip.Provider.IP, contracts, log)
+		storageIP, overlayErr := w.findStorageIPOverlay(ctx, ip.Provider.IP, contracts, ip.Storage, log)
 		if overlayErr != nil {
 			log.Warn("overlay fallback for storage endpoint failed", "provider_pubkey", pk, "error", overlayErr)
 			overlayFailed[pk] = overlayErr

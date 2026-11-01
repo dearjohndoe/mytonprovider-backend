@@ -234,7 +234,7 @@ func (w *providersMasterWorker) resolveProvidersIPsNoPersist(ctx context.Context
 			continue
 		}
 
-		storageIP, err := w.findStorageIPOverlay(ctx, ip.Provider.IP, providerContracts, log)
+		storageIP, err := w.findStorageIPOverlay(ctx, ip.Provider.IP, providerContracts, ip.Storage, log)
 		if err != nil {
 			delete(availableProvidersIPs, pk)
 			continue
