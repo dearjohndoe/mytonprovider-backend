@@ -300,7 +300,7 @@ CREATE INDEX IF NOT EXISTS idx_bag_pipeline_events_created
 
 CREATE OR REPLACE FUNCTION providers.parse_speed_to_int(
 	speed_text text)
-    RETURNS integer
+    RETURNS bigint
     LANGUAGE plpgsql
     COST 100
     IMMUTABLE PARALLEL UNSAFE
@@ -311,7 +311,7 @@ DECLARE
     multiplier integer := 1;
 BEGIN
     value := regexp_replace(speed_text, '[^0-9\.]', '', 'g')::numeric;
-    unit := regexp_replace(speed_text, '[0-9\.]', '', 'g');
+    unit := regexp_replace(regexp_replace(speed_text, '[0-9\.]', '', 'g'), '\s', '', 'g');
 
     IF unit = 'KiBps' OR unit = 'KiB/s' OR unit = 'KiB' THEN
         multiplier := 1024;
@@ -327,7 +327,7 @@ BEGIN
         multiplier := 1000 * 1000 * 1000;
     END IF;
 
-    RETURN (value * multiplier)::integer;
+    RETURN (value * multiplier)::bigint;
 END;
 $BODY$;
 

@@ -2,6 +2,37 @@
 
 **[English version](README.md)**
 
+## parse_speed_to_int bigint (002)
+
+### Прод: порядок выката
+
+1. Выполнить SQL **до** деплоя coordinator с новой формулой рейтинга. Миграции при старте не запускаются. `CREATE OR REPLACE` не меняет тип возврата, поэтому функция сначала удаляется:
+
+```bash
+psql -h <host> -U pguser -d providerdb -f coordinator/db/migrations/002_parse_speed_bigint.up.sql
+```
+
+2. Проверить функцию:
+
+```sql
+SELECT providers.parse_speed_to_int('107.7 MiB/s');
+SELECT providers.parse_speed_to_int('1772 MiB/s');
+```
+
+Ожидается `112826777` и `1858076672`. Второе значение не влезает в `integer` (~2048 MiB/s).
+
+3. Deploy coordinator. Следующий `UpdateRating` посчитает рейтинг с байтами, свободным местом и потолками.
+
+### Откат SQL
+
+Сначала откатить код coordinator (формула снова ждёт `integer`), затем:
+
+```bash
+psql ... -f coordinator/db/migrations/002_parse_speed_bigint.down.sql
+```
+
+Откат кода без down.sql безопасен: `bigint` совместим со старыми вызовами. Down нужен, только если надо вернуть прежний `integer`.
+
 ## Pipeline events (001)
 
 ### Прод: порядок выката
